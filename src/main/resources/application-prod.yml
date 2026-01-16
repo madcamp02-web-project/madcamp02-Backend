@@ -1,0 +1,78 @@
+# ============================================
+# MadCamp02 Backend - 프로덕션 환경 설정
+# ============================================
+
+spring:
+  # 프로덕션 데이터베이스 (환경변수 필수)
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 10
+
+  # 프로덕션 JPA 설정
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        generate_statistics: false
+
+  # 프로덕션 Redis
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+
+  # Flyway 프로덕션 설정
+  flyway:
+    clean-disabled: true  # 프로덕션에서 clean 절대 금지
+
+# ============================================
+# 프로덕션 JWT 설정 (환경변수 필수)
+# ============================================
+jwt:
+  secret: ${JWT_SECRET}
+  access-token-expiration: 3600000    # 1시간
+  refresh-token-expiration: 604800000 # 7일
+
+# ============================================
+# 프로덕션 서버 설정
+# ============================================
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-message: never
+    include-stacktrace: never
+
+# ============================================
+# 프로덕션 로깅 (최소)
+# ============================================
+logging:
+  level:
+    root: WARN
+    com.madcamp02: INFO
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN
+
+# ============================================
+# 프로덕션 외부 API
+# ============================================
+finnhub:
+  api-key: ${FINNHUB_API_KEY}
+
+ai:
+  server:
+    url: ${AI_SERVER_URL}
+
+# ============================================
+# 프로덕션 Swagger 비활성화
+# ============================================
+springdoc:
+  swagger-ui:
+    enabled: false
+  api-docs:
+    enabled: false
