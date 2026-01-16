@@ -1,0 +1,71 @@
+# ============================================
+# MadCamp02 Backend - 개발 환경 설정
+# ============================================
+
+spring:
+  # 개발용 데이터베이스 (Docker Compose)
+  datasource:
+    url: jdbc:postgresql://localhost:5432/madcamp02-backend
+    username: postgres
+    password: postgres
+
+  # 개발 환경 JPA 설정
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  # 개발 환경 Redis
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: ""  # 개발 환경에서는 비밀번호 없이
+
+  # Flyway 개발 설정
+  flyway:
+    clean-disabled: false  # 개발 환경에서만 clean 허용
+
+# ============================================
+# 개발용 JWT 설정
+# ============================================
+jwt:
+  secret: dev-secret-key-for-local-development-minimum-32-characters-long
+  access-token-expiration: 86400000   # 개발시 24시간
+  refresh-token-expiration: 604800000 # 7일
+
+# ============================================
+# 개발 서버 설정
+# ============================================
+server:
+  port: 8080
+
+# ============================================
+# 개발 환경 로깅 (상세)
+# ============================================
+logging:
+  level:
+    root: INFO
+    com.madcamp02: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+# ============================================
+# 개발용 외부 API (Mock 가능)
+# ============================================
+finnhub:
+  api-key: ${FINNHUB_API_KEY:sandbox_api_key}
+
+ai:
+  server:
+    url: http://localhost:8000
+
+# ============================================
+# 개발 환경 Swagger 활성화
+# ============================================
+springdoc:
+  swagger-ui:
+    enabled: true
