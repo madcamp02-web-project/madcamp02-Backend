@@ -1,0 +1,24 @@
+# .github/workflows/build-test.yml
+name: Build Test
+
+on: [pull_request]
+
+jobs:
+  build-test:
+    name: Build Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+
+      - name: Install dependencies
+        run: yarn install
+
+      - name: Run build
+        run: yarn build

@@ -1,0 +1,16 @@
+# .github/workflows/review-assign.yml
+name: Review Assign
+
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+
+jobs:
+  assign:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hkusu/review-assign-action@v1
+        with:
+          assignees: ${{ github.actor }}  # PR 작성자를 담당자로 설정
+          reviewers: m9-m9,nno3onn    # 리뷰어 목록
+          exclude-author: true            # 작성자는 리뷰어에서 

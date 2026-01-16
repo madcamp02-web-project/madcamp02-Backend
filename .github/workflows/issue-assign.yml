@@ -1,0 +1,14 @@
+# .github/workflows/issue-assign.yml
+name: Issues
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  assignAuthor:
+    name: Assign author to issue
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assign author to issue
+        uses: technote-space/assign-author@v1
