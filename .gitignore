@@ -178,3 +178,5 @@ out/
 .env
 .env.local
 .env.*.local
+
+.run
