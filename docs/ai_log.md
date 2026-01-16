@@ -1,4 +1,4 @@
-# 🤖 AI Prompting Log - Stock-Persona 프로젝트
+# 🤖 AI Prompting Log - MadCamp02 프로젝트
 
 > 대화 일시: 2026-01-16  
 > 목적: 프로젝트 명세서 작성 및 개발 계획 수립
