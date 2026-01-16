@@ -1,4 +1,4 @@
-# 📁 Stock-Persona: 최종 통합 명세서
+# 📁 MadCamp02: 최종 통합 명세서
 
 **Ver 2.0 - Complete Edition (Frontend + Backend Integration)**
 
@@ -30,7 +30,7 @@
 
 | 항목 | 내용 |
 |------|------|
-| **프로젝트명** | Stock-Persona (스톡 페르소나) |
+| **프로젝트명** | MadCamp02 |
 | **슬로건** | "차트는 운명을 말하고, 수익은 아바타를 춤추게 한다." |
 | **버전** | 2.0 |
 | **타겟 플랫폼** | Web (Desktop 우선, 모바일 반응형) |
@@ -1171,7 +1171,7 @@ high quality, detailed, 4k
 ### 10.1 WebSocket 엔드포인트
 
 ```
-ws://api.stock-persona.com/ws
+ws://api.madcamp02.com/ws
 ```
 
 ### 10.2 STOMP 채널
@@ -1355,8 +1355,8 @@ ws://api.stock-persona.com/ws
 | 환경 | 용도 | URL |
 |------|------|-----|
 | Development | 개발 | localhost:3000 |
-| Staging | QA 테스트 | staging.stock-persona.com |
-| Production | 운영 | stock-persona.com |
+| Staging | QA 테스트 | staging.madcamp02.com |
+| Production | 운영 | madcamp02.com |
 
 ### 14.2 인프라
 
@@ -1373,9 +1373,9 @@ ws://api.stock-persona.com/ws
 #### Frontend (.env.local)
 
 ```env
-NEXT_PUBLIC_API_URL=https://api.stock-persona.com
-NEXT_PUBLIC_WS_URL=wss://api.stock-persona.com/ws
-NEXTAUTH_URL=https://stock-persona.com
+NEXT_PUBLIC_API_URL=https://api.madcamp02.com
+NEXT_PUBLIC_WS_URL=wss://api.madcamp02.com/ws
+NEXTAUTH_URL=https://madcamp02.com
 NEXTAUTH_SECRET=xxx
 GOOGLE_CLIENT_ID=xxx
 GOOGLE_CLIENT_SECRET=xxx
@@ -1386,7 +1386,7 @@ GOOGLE_CLIENT_SECRET=xxx
 ```yaml
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/stockpersona
+    url: jdbc:postgresql://localhost:5432/madcamp02-backend
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
   redis:
@@ -1486,4 +1486,4 @@ jwt:
 
 **문서 버전:** 2.0  
 **최종 수정일:** 2026-01-16  
-**작성자:** Stock-Persona 개발팀
+**작성자:** MadCamp02 개발팀

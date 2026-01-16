@@ -1,4 +1,4 @@
-# ⚙️ Stock-Persona: 백엔드 개발 계획서
+# ⚙️ MadCamp02: 백엔드 개발 계획서
 
 **Ver 1.0 - Backend Development Blueprint**
 
@@ -28,7 +28,7 @@
 
 ### 1.1 백엔드 역할
 
-Stock-Persona 백엔드는 다음 핵심 기능을 담당합니다:
+MadCamp02 백엔드는 다음 핵심 기능을 담당합니다:
 
 1. **사용자 관리**: OAuth2 인증, JWT 토큰, 프로필 관리
 2. **모의투자 엔진**: 매수/매도 트랜잭션, 포트폴리오 관리
@@ -216,8 +216,8 @@ Stock-Persona 백엔드는 다음 핵심 기능을 담당합니다:
 ### 4.1 Spring Boot 프로젝트 구조
 
 ```
-📁 stock-persona-backend/
-├── 📁 src/main/java/com/stockpersona/
+📁 madcamp02-backend/
+├── 📁 src/main/java/com/madcamp02/
 │   │
 │   ├── 📁 config/                        # 설정 클래스
 │   │   ├── SecurityConfig.java           # Spring Security 설정
@@ -337,7 +337,7 @@ Stock-Persona 백엔드는 다음 핵심 기능을 담당합니다:
 │   │   ├── SajuCalculator.java           # 사주 계산
 │   │   └── DateUtils.java                # 날짜 유틸
 │   │
-│   └── StockPersonaApplication.java      # 메인 클래스
+│   └── MadCamp02Application.java      # 메인 클래스
 │
 ├── 📁 src/main/resources/
 │   ├── application.yml                   # 메인 설정
@@ -348,7 +348,7 @@ Stock-Persona 백엔드는 다음 핵심 기능을 담당합니다:
 │       ├── V2__add_items.sql
 │       └── V3__add_notifications.sql
 │
-├── 📁 src/test/java/com/stockpersona/
+├── 📁 src/test/java/com/madcamp02/
 │   ├── 📁 service/
 │   │   ├── TradeServiceTest.java
 │   │   ├── GachaServiceTest.java
@@ -369,7 +369,7 @@ Stock-Persona 백엔드는 다음 핵심 기능을 담당합니다:
 ### 4.2 FastAPI 프로젝트 구조
 
 ```
-📁 stock-persona-ai/
+📁 madcamp02-ai/
 ├── 📁 app/
 │   ├── main.py                           # FastAPI 앱
 │   ├── 📁 api/
@@ -1167,7 +1167,7 @@ services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_DB: stockpersona
+      POSTGRES_DB: madcamp02-backend
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
@@ -1181,10 +1181,10 @@ services:
       - "6379:6379"
 
   backend:
-    build: ./stock-persona-backend
+    build: ./madcamp02-backend
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      DB_URL: jdbc:postgresql://postgres:5432/stockpersona
+      DB_URL: jdbc:postgresql://postgres:5432/madcamp02-backend
       REDIS_HOST: redis
     ports:
       - "8080:8080"
@@ -1193,7 +1193,7 @@ services:
       - redis
 
   ai-server:
-    build: ./stock-persona-ai
+    build: ./madcamp02-ai
     runtime: nvidia
     environment:
       CUDA_VISIBLE_DEVICES: "0"
@@ -1218,7 +1218,7 @@ services:
 # application.yml
 spring:
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/stockpersona}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/madcamp02-backend}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:password}
   
@@ -1427,4 +1427,4 @@ dependencies {
 
 **문서 버전:** 1.0  
 **최종 수정일:** 2026-01-16  
-**작성자:** Stock-Persona 개발팀
+**작성자:** MadCamp02 개발팀
