@@ -1,6 +1,41 @@
 # 📁 MadCamp02: 최종 통합 명세서
 
-**Ver 2.0 - Complete Edition (Frontend + Backend Integration)**
+**Ver 2.3 - Complete Edition (Frontend + Backend Integration)**
+
+---
+
+## 📝 변경 이력
+
+| 버전 | 날짜 | 변경 내용 | 작성자 |
+|------|------|----------|--------|
+| 1.0 | 2026-01-15 | 초기 명세서 작성 | MadCamp02 |
+| 2.0 | 2026-01-16 | 프론트엔드/백엔드 통합 명세 완성 | MadCamp02 |
+| 2.1 | 2026-01-17 | Exception 구조 정리, ErrorResponse DTO 추가 | MadCamp02 |
+| 2.2 | 2026-01-17 | 카카오 OAuth, 일반 회원가입/로그인 추가 | MadCamp02 |
+| **2.3** | **2026-01-17** | **OAuth2 백엔드 주도 방식으로 변경** | **MadCamp02** |
+
+### Ver 2.3 주요 변경 사항
+
+1. **OAuth2 방식 변경**
+   - 이전: 프론트엔드 주도 (프론트에서 Access Token 획득 후 백엔드로 전송)
+   - 현재: 백엔드 주도 (Spring Security OAuth2 Client가 직접 처리)
+
+2. **신규 생성 파일**
+   | 파일 | 경로 | 용도 |
+   |------|------|------|
+   | `OAuth2SuccessHandler.java` | `security/` | OAuth2 로그인 성공 시 JWT 발급 및 프론트엔드 리다이렉트 |
+   | `AppConfig.java` | `config/` | RestTemplate 등 공통 Bean 등록 |
+
+3. **수정된 파일**
+   | 파일 | 변경 내용 |
+   |------|----------|
+   | `application.yml` | Kakao OAuth2 Client 설정 추가, `app.oauth2.redirect-uri` 추가 |
+   | `SecurityConfig.java` | `.oauth2Login()` 설정 추가, `OAuth2SuccessHandler` 연결 |
+   | `docker-compose.yml` | `OAUTH2_REDIRECT_URI` 환경변수 추가 |
+
+4. **리다이렉트 URI 변경**
+   - 카카오: `http://localhost:8080/login/oauth2/code/kakao`
+   - Google: `http://localhost:8080/login/oauth2/code/google`
 
 ---
 
@@ -1305,10 +1340,10 @@ ws://api.madcamp02.com/ws
 
 | 방식 | provider | 엔드포인트 | 설명 |
 |------|----------|-----------|------|
-| 일반 회원가입 | `LOCAL` | `/auth/signup` | 이메일 + 비밀번호 + 닉네임 |
-| 일반 로그인 | `LOCAL` | `/auth/login` | 이메일 + 비밀번호 |
-| Google OAuth | `GOOGLE` | `/auth/oauth/google` | Google ID Token |
-| Kakao OAuth | `KAKAO` | `/auth/oauth/kakao` | Kakao Access Token |
+| 일반 회원가입 | `LOCAL` | `POST /auth/signup` | 이메일 + 비밀번호 + 닉네임 |
+| 일반 로그인 | `LOCAL` | `POST /auth/login` | 이메일 + 비밀번호 |
+| Google OAuth | `GOOGLE` | `GET /oauth2/authorization/google` | 백엔드 주도 OAuth2 |
+| Kakao OAuth | `KAKAO` | `GET /oauth2/authorization/kakao` | 백엔드 주도 OAuth2 |
 
 ### 11.2 인증 흐름
 
@@ -1322,13 +1357,23 @@ ws://api.madcamp02.com/ws
 5. 서버 → BCrypt 비밀번호 검증 → JWT 발급
 ```
 
-#### OAuth 로그인 (Google / Kakao)
+#### OAuth 로그인 (Google / Kakao) - 백엔드 주도 방식 🆕
 ```
-1. 사용자 → Google/Kakao 로그인 → Token 획득
-2. POST /auth/oauth/google (또는 /kakao) {provider, idToken/accessToken}
-3. 서버 → OAuth Provider에 토큰 검증 요청
-4. 서버 → 사용자 조회/생성 → JWT 발급
+1. 프론트엔드 → GET /oauth2/authorization/kakao (또는 google) 로 리다이렉트
+2. 백엔드 → Kakao/Google 로그인 페이지로 리다이렉트
+3. 사용자 → 소셜 로그인 완료
+4. Kakao/Google → 백엔드 /login/oauth2/code/kakao 로 Authorization Code 전달
+5. 백엔드 → Access Token 교환 + 사용자 정보 조회
+6. 백엔드 → 사용자 조회/생성 → JWT 발급
+7. 백엔드 → 프론트엔드로 리다이렉트 (토큰 전달)
+   http://localhost:3000/oauth/callback?accessToken=xxx&refreshToken=xxx&isNewUser=true
 ```
+
+**카카오 리다이렉트 URI (개발자 콘솔 등록):**
+- `http://localhost:8080/login/oauth2/code/kakao`
+
+**Google 리다이렉트 URI:**
+- `http://localhost:8080/login/oauth2/code/google`
 
 ### 11.3 JWT 구조
 
@@ -1639,15 +1684,86 @@ com.madcamp02.exception/
 ├── ErrorCode.java              # 에러 코드 enum (명세서 순서 기준)
 ├── ErrorResponse.java          # 에러 응답 DTO (팩토리 메서드 포함)
 ├── BusinessException.java      # 기본 비즈니스 예외 (부모 클래스)
-├── AuthException.java          # 인증 예외 (AUTH_001~005)
+├── AuthException.java          # 인증 예외 (AUTH_001~008)
 ├── TradeException.java         # 거래 예외 (TRADE_001~004)
 ├── GameException.java          # 게임 예외 (GAME_001~003)
 ├── UserException.java          # 사용자 예외 (USER_001~002)
 └── GlobalExceptionHandler.java # 전역 예외 핸들러
 ```
 
+### D. 보안 모듈 구조 (Ver 2.3 추가)
+
+```
+com.madcamp02.security/
+├── JwtTokenProvider.java         # JWT Access/Refresh Token 생성 및 검증
+│                                 # - createAccessToken(): 1시간 유효
+│                                 # - createRefreshToken(): 7일 유효
+│                                 # - validateToken(): 토큰 유효성 검사
+│
+├── JwtAuthenticationFilter.java  # 모든 요청에서 JWT 토큰 검증
+│                                 # - Authorization 헤더에서 토큰 추출
+│                                 # - 유효한 토큰이면 SecurityContext에 인증 정보 설정
+│
+├── OAuth2SuccessHandler.java     # 🆕 백엔드 주도 OAuth2 성공 핸들러
+│                                 # - onAuthenticationSuccess(): OAuth2 로그인 성공 시 호출
+│                                 # - OAuth2User에서 이메일/닉네임 추출
+│                                 # - 신규 사용자면 자동 가입 + 지갑 생성
+│                                 # - JWT 발급 후 프론트엔드로 리다이렉트
+│                                 # - 리다이렉트 URL: app.oauth2.redirect-uri
+│
+├── CustomUserDetails.java        # Spring Security UserDetails 구현
+│                                 # - 사용자 ID, 이메일, 권한 정보 보관
+│
+└── CustomUserDetailsService.java # DB에서 사용자 정보 로드
+                                  # - loadUserByUsername(): 이메일로 사용자 조회
+```
+
+### E. 설정 파일 구조 (Ver 2.3 추가)
+
+```
+com.madcamp02.config/
+├── SecurityConfig.java           # Spring Security 메인 설정
+│                                 # - JWT 필터 등록
+│                                 # - CORS 설정
+│                                 # - OAuth2 Login 설정 (.oauth2Login())
+│                                 # - 공개/보호 엔드포인트 정의
+│
+├── AppConfig.java                # 🆕 공통 Bean 등록
+│                                 # - RestTemplate Bean (Kakao API 호출용)
+│
+├── RedisConfig.java              # Redis 연결 설정
+│                                 # - RedisTemplate Bean
+│                                 # - Lettuce 클라이언트 설정
+│
+└── SwaggerConfig.java            # SpringDoc OpenAPI 설정
+                                  # - API 문서 자동 생성
+                                  # - /swagger-ui.html 접근 가능
+```
+
+### F. 환경 변수 (Ver 2.3 추가)
+
+```yaml
+# application.yml 주요 설정
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+          kakao:
+            client-id: ${KAKAO_CLIENT_ID}
+            client-secret: ${KAKAO_CLIENT_SECRET}
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+
+app:
+  oauth2:
+    redirect-uri: ${OAUTH2_REDIRECT_URI:http://localhost:3000/oauth/callback}
+```
+
 ---
 
-**문서 버전:** 2.2 (🆕 카카오 OAuth, 일반 회원가입/로그인 추가)  
+**문서 버전:** 2.3 (OAuth2 백엔드 주도 방식 변경)  
 **최종 수정일:** 2026-01-17  
 **작성자:** MadCamp02 개발팀
