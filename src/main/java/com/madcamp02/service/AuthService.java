@@ -42,6 +42,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 
@@ -156,7 +157,7 @@ public class AuthService {
                     .email(email)
                     .nickname(name != null ? name : email.split("@")[0])
                     .provider("GOOGLE")
-                    .birthDate(null)  // 온보딩에서 입력
+                    .birthDate(LocalDate.of(2000, 1, 1))  // 임시 기본값 (온보딩에서 수정)
                     .build();
             user = userRepository.save(user);
 
