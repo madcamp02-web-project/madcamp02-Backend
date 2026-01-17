@@ -14,13 +14,13 @@ import java.util.List;
 @Repository
 public interface TradeLogRepository extends JpaRepository<TradeLog, Long> {
 
-    // »ç¿ëÀÚÀÇ ÀüÃ¼ °Å·¡ ³»¿ª (ÃÖ½Å¼ø)
+    // ì‚¬ìš©ìì˜ ì „ì²´ ê±°ë˜ ë‚´ì—­ (ìµœì‹ ìˆœ)
     List<TradeLog> findByUserUserIdOrderByTradeDateDesc(Long userId);
 
-    // »ç¿ëÀÚÀÇ °Å·¡ ³»¿ª (ÆäÀÌÂ¡)
+    // ì‚¬ìš©ìì˜ ê±°ë˜ ë‚´ì—­ (í˜ì´ì§•)
     Page<TradeLog> findByUserUserId(Long userId, Pageable pageable);
 
-    // Æ¯Á¤ ±â°£ °Å·¡ ³»¿ª
+    // íŠ¹ì • ê¸°ê°„ ê±°ë˜ ë‚´ì—­
     @Query("SELECT t FROM TradeLog t WHERE t.user.userId = :userId " +
             "AND t.tradeDate BETWEEN :startDate AND :endDate " +
             "ORDER BY t.tradeDate DESC")
@@ -30,21 +30,21 @@ public interface TradeLogRepository extends JpaRepository<TradeLog, Long> {
             @Param("endDate") LocalDateTime endDate
     );
 
-    // Æ¯Á¤ Á¾¸ñ °Å·¡ ³»¿ª
+    // íŠ¹ì • ì¢…ëª© ê±°ë˜ ë‚´ì—­
     List<TradeLog> findByUserUserIdAndTickerOrderByTradeDateDesc(Long userId, String ticker);
 
-    // °Å·¡ À¯Çüº° ³»¿ª (¸Å¼ö/¸Åµµ)
+    // ê±°ë˜ ìœ í˜•ë³„ ë‚´ì—­ (ë§¤ìˆ˜/ë§¤ë„)
     List<TradeLog> findByUserUserIdAndTradeTypeOrderByTradeDateDesc(
             Long userId,
             TradeLog.TradeType tradeType
     );
 
-    // »ç¿ëÀÚÀÇ ÃÑ ½ÇÇö ¼ÕÀÍ ÇÕ°è
+    // ì‚¬ìš©ìì˜ ì´ ì‹¤í˜„ ì†ìµ í•©ê³„
     @Query("SELECT COALESCE(SUM(t.realizedPnl), 0) FROM TradeLog t " +
             "WHERE t.user.userId = :userId AND t.realizedPnl IS NOT NULL")
     BigDecimal sumRealizedPnlByUserId(@Param("userId") Long userId);
 
-    // ÃÖ±Ù N°³ °Å·¡ ³»¿ª
+    // ìµœê·¼ Nê°œ ê±°ë˜ ë‚´ì—­
     @Query("SELECT t FROM TradeLog t WHERE t.user.userId = :userId " +
             "ORDER BY t.tradeDate DESC LIMIT :limit")
     List<TradeLog> findRecentTrades(
@@ -52,7 +52,7 @@ public interface TradeLogRepository extends JpaRepository<TradeLog, Long> {
             @Param("limit") int limit
     );
 
-    // Æ¯Á¤ Á¾¸ñÀÇ ÀüÃ¼ °Å·¡·® (Åë°è¿ë)
+    // íŠ¹ì • ì¢…ëª©ì˜ ì „ì²´ ê±°ë˜ëŸ‰ (í†µê³„ìš©)
     @Query("SELECT SUM(t.quantity) FROM TradeLog t WHERE t.ticker = :ticker")
     Long sumQuantityByTicker(@Param("ticker") String ticker);
 }

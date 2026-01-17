@@ -1,6 +1,6 @@
 package com.madcamp02.domain.wallet;
 
-//¿©±â ÄÚµå °ü·ÃµÈ ±Ã±İÇÑ Á¡ ÀÖÀ» °æ¿ì User.java·Î °¡¼­ ÇÏ³ªÇÏ³ª ¹è¿ì¸é µÈ´Ù. JPA Entity ¼³Á¤ÇÏ´Â°Ç user.java¿¡ Â¥´Â ¹æ¹ı ±â·ÏÇØµÒ
+//ì—¬ê¸° ì½”ë“œ ê´€ë ¨ëœ ê¶ê¸ˆí•œ ì  ìˆì„ ê²½ìš° User.javaë¡œ ê°€ì„œ í•˜ë‚˜í•˜ë‚˜ ë°°ìš°ë©´ ëœë‹¤. JPA Entity ì„¤ì •í•˜ëŠ”ê±´ user.javaì— ì§œëŠ” ë°©ë²• ê¸°ë¡í•´ë‘ 
 
 import com.madcamp02.domain.user.User;
 import jakarta.persistence.*;
@@ -42,7 +42,7 @@ public class Wallet {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    // ========== »ı¼ºÀÚ ==========
+    // ========== ìƒì„±ì ==========
 
     @Builder
     public Wallet(User user) {
@@ -54,11 +54,11 @@ public class Wallet {
         this.updatedAt = LocalDateTime.now();
     }
 
-    // ========== ºñÁî´Ï½º ¸Ş¼­µå ==========
+    // ========== ë¹„ì¦ˆë‹ˆìŠ¤ ë©”ì„œë“œ ==========
 
     public void deductCash(BigDecimal amount) {
         if (this.cashBalance.compareTo(amount) < 0) {
-            throw new IllegalArgumentException("ÀÜ°í°¡ ºÎÁ·ÇÕ´Ï´Ù.");
+            throw new IllegalArgumentException("ì”ê³ ê°€ ë¶€ì¡±í•©ë‹ˆë‹¤.");
         }
         this.cashBalance = this.cashBalance.subtract(amount);
         this.updatedAt = LocalDateTime.now();
@@ -81,7 +81,7 @@ public class Wallet {
 
     public void deductGameCoin(int amount) {
         if (this.gameCoin < amount) {
-            throw new IllegalArgumentException("°ÔÀÓ ÄÚÀÎÀÌ ºÎÁ·ÇÕ´Ï´Ù.");
+            throw new IllegalArgumentException("ê²Œì„ ì½”ì¸ì´ ë¶€ì¡±í•©ë‹ˆë‹¤.");
         }
         this.gameCoin -= amount;
         this.updatedAt = LocalDateTime.now();

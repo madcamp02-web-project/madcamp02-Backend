@@ -32,7 +32,7 @@ public class ChatHistory {
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(nullable = false, columnDefinition = "jsonb")
-    private String messages;  // JSON ¹®ÀÚ¿­·Î ÀúÀå
+    private String messages;  // JSON ë¬¸ìì—´ë¡œ ì €ì¥
 
     @Column(name = "sentiment_score")
     private Float sentimentScore;
@@ -40,7 +40,7 @@ public class ChatHistory {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    // ========== »ı¼ºÀÚ ==========
+    // ========== ìƒì„±ì ==========
 
     @Builder
     public ChatHistory(User user, UUID sessionId, String messages) {
@@ -50,7 +50,7 @@ public class ChatHistory {
         this.createdAt = LocalDateTime.now();
     }
 
-    // ========== ºñÁî´Ï½º ¸Ş¼­µå ==========
+    // ========== ë¹„ì¦ˆë‹ˆìŠ¤ ë©”ì„œë“œ ==========
 
     public void updateMessages(String messages) {
         this.messages = messages;

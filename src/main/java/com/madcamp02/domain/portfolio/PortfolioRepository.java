@@ -13,13 +13,13 @@ import java.util.Optional;
 @Repository
 public interface PortfolioRepository extends JpaRepository<Portfolio, Long> {
 
-    // »ç¿ëÀÚÀÇ ÀüÃ¼ Æ÷Æ®Æú¸®¿À Á¶È¸
+    // ì‚¬ìš©ìì˜ ì „ì²´ í¬íŠ¸í´ë¦¬ì˜¤ ì¡°íšŒ
     List<Portfolio> findByUserUserId(Long userId);
 
-    // »ç¿ëÀÚÀÇ Æ¯Á¤ Á¾¸ñ º¸À¯ ÇöÈ² Á¶È¸
+    // ì‚¬ìš©ìì˜ íŠ¹ì • ì¢…ëª© ë³´ìœ  í˜„í™© ì¡°íšŒ
     Optional<Portfolio> findByUserUserIdAndTicker(Long userId, String ticker);
 
-    // »ç¿ëÀÚÀÇ Æ¯Á¤ Á¾¸ñ Á¶È¸ (ºñ°üÀû ¶ô)
+    // ì‚¬ìš©ìì˜ íŠ¹ì • ì¢…ëª© ì¡°íšŒ (ë¹„ê´€ì  ë½)
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT p FROM Portfolio p WHERE p.user.userId = :userId AND p.ticker = :ticker")
     Optional<Portfolio> findByUserIdAndTickerWithLock(
@@ -27,20 +27,20 @@ public interface PortfolioRepository extends JpaRepository<Portfolio, Long> {
             @Param("ticker") String ticker
     );
 
-    // Æ¯Á¤ Á¾¸ñÀ» º¸À¯ÇÑ »ç¿ëÀÚ ¸ñ·Ï
+    // íŠ¹ì • ì¢…ëª©ì„ ë³´ìœ í•œ ì‚¬ìš©ì ëª©ë¡
     List<Portfolio> findByTicker(String ticker);
 
-    // Æ¯Á¤ Á¾¸ñ º¸À¯ ¿©ºÎ È®ÀÎ
+    // íŠ¹ì • ì¢…ëª© ë³´ìœ  ì—¬ë¶€ í™•ì¸
     boolean existsByUserUserIdAndTicker(Long userId, String ticker);
 
-    // »ç¿ëÀÚÀÇ Æ÷Æ®Æú¸®¿À »èÁ¦
+    // ì‚¬ìš©ìì˜ í¬íŠ¸í´ë¦¬ì˜¤ ì‚­ì œ
     void deleteByUserUserIdAndTicker(Long userId, String ticker);
 
-    // ¼ö·®ÀÌ 0ÀÎ Æ÷Æ®Æú¸®¿À »èÁ¦
+    // ìˆ˜ëŸ‰ì´ 0ì¸ í¬íŠ¸í´ë¦¬ì˜¤ ì‚­ì œ
     @Query("DELETE FROM Portfolio p WHERE p.quantity = 0")
     void deleteEmptyPortfolios();
 
-    // »ç¿ëÀÚÀÇ º¸À¯ Á¾¸ñ ¼ö Á¶È¸
+    // ì‚¬ìš©ìì˜ ë³´ìœ  ì¢…ëª© ìˆ˜ ì¡°íšŒ
     @Query("SELECT COUNT(p) FROM Portfolio p WHERE p.user.userId = :userId")
     long countByUserId(@Param("userId") Long userId);
 }

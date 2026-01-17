@@ -32,8 +32,8 @@ spring:
 # ============================================
 jwt:
   secret: dev-secret-key-for-local-development-minimum-32-characters-long
-  access-token-expiration: 86400000   # 개발시 24시간
-  refresh-token-expiration: 604800000 # 7일
+  access-expiration: 86400000   # 개발시 24시간
+  refresh-expiration: 604800000 # 7일
 
 # ============================================
 # 개발 서버 설정

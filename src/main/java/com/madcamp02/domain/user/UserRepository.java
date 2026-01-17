@@ -1,71 +1,71 @@
-//Repository¿Í JPA´Â ¾î¶»°Ô sql Äõ¸® ¹®ÀÚ¿­À» ³¯¸±±î? ¿¡ ´ëÇÑ ¿ø¸® ¼³¸í
+//Repositoryì™€ JPAëŠ” ì–´ë–»ê²Œ sql ì¿¼ë¦¬ ë¬¸ìì—´ì„ ë‚ ë¦´ê¹Œ? ì— ëŒ€í•œ ì›ë¦¬ ì„¤ëª…
 
 /*
-JPA(±¸ÇöÃ¼ÀÎ Hibernate)°¡ Äõ¸®¸¦ ¸¸µå´Â °úÁ¤Àº Å©°Ô 3´Ü°è·Î ¿ä¾àµË´Ï´Ù.
+JPA(êµ¬í˜„ì²´ì¸ Hibernate)ê°€ ì¿¼ë¦¬ë¥¼ ë§Œë“œëŠ” ê³¼ì •ì€ í¬ê²Œ 3ë‹¨ê³„ë¡œ ìš”ì•½ë©ë‹ˆë‹¤.
 
-¸Ş¼­µå ºĞ¼® (Parsing)
+ë©”ì„œë“œ ë¶„ì„ (Parsing)
 
-findByEmail °°Àº ¸Ş¼­µå ÀÌ¸§À» ºĞ¼®ÇÏ¿© Å°¿öµå(find=Á¶È¸, By=Á¶°Ç, Email=ÇÊµå)¸¦ ÃßÃâÇÕ´Ï´Ù.
+findByEmail ê°™ì€ ë©”ì„œë“œ ì´ë¦„ì„ ë¶„ì„í•˜ì—¬ í‚¤ì›Œë“œ(find=ì¡°íšŒ, By=ì¡°ê±´, Email=í•„ë“œ)ë¥¼ ì¶”ì¶œí•©ë‹ˆë‹¤.
 
-JPQL »ı¼º (Abstract Query)
+JPQL ìƒì„± (Abstract Query)
 
-ÃßÃâÇÑ Á¤º¸¸¦ ¹ÙÅÁÀ¸·Î DB Å×ÀÌºíÀÌ ¾Æ´Ñ ÀÚ¹Ù ¿£Æ¼Æ¼ °´Ã¼¸¦ ´ë»óÀ¸·Î ÇÏ´Â Áß°£ ´Ü°è Äõ¸®(JPQL)¸¦ »ı¼ºÇÕ´Ï´Ù.
+ì¶”ì¶œí•œ ì •ë³´ë¥¼ ë°”íƒ•ìœ¼ë¡œ DB í…Œì´ë¸”ì´ ì•„ë‹Œ ìë°” ì—”í‹°í‹° ê°ì²´ë¥¼ ëŒ€ìƒìœ¼ë¡œ í•˜ëŠ” ì¤‘ê°„ ë‹¨ê³„ ì¿¼ë¦¬(JPQL)ë¥¼ ìƒì„±í•©ë‹ˆë‹¤.
 
-¿¹: SELECT u FROM User u WHERE u.email = :email
+ì˜ˆ: SELECT u FROM User u WHERE u.email = :email
 
-SQL º¯È¯ (Translation)
+SQL ë³€í™˜ (Translation)
 
-application.properties¿¡ ¼³Á¤µÈ Dialect(¹æ¾ğ) Á¤º¸¸¦ ÂüÁ¶ÇØ, JPQLÀ» ½ÇÁ¦ »ç¿ëÇÏ´Â DB(MySQL, Oracle µî)¿¡ ¸Â´Â SQL·Î ÃÖÁ¾ º¯È¯ÇÕ´Ï´Ù.
+application.propertiesì— ì„¤ì •ëœ Dialect(ë°©ì–¸) ì •ë³´ë¥¼ ì°¸ì¡°í•´, JPQLì„ ì‹¤ì œ ì‚¬ìš©í•˜ëŠ” DB(MySQL, Oracle ë“±)ì— ë§ëŠ” SQLë¡œ ìµœì¢… ë³€í™˜í•©ë‹ˆë‹¤.
 
-¿¹: SELECT * FROM users WHERE email = ?
+ì˜ˆ: SELECT * FROM users WHERE email = ?
  */
 
 
-//Repository´Â µ¥ÀÌÅÍº£ÀÌ½º Á¢±ÙÀ» ´ã´çÇÏ´Â ÀÎÅÍÆäÀÌ½º·Î Spring Data JPA°¡ ÀÚµ¿À¸·Î ±¸ÇöÃ¼¸¦ »ı¼ºÇÏ´Â °Í.
-//Service  ¡æ  Repository (ÀÎÅÍÆäÀÌ½º)  ¡æ  JPA°¡ ÀÚµ¿ »ı¼ºÇÑ ±¸ÇöÃ¼  ¡æ  Database
+//RepositoryëŠ” ë°ì´í„°ë² ì´ìŠ¤ ì ‘ê·¼ì„ ë‹´ë‹¹í•˜ëŠ” ì¸í„°í˜ì´ìŠ¤ë¡œ Spring Data JPAê°€ ìë™ìœ¼ë¡œ êµ¬í˜„ì²´ë¥¼ ìƒì„±í•˜ëŠ” ê²ƒ.
+//Service  â†’  Repository (ì¸í„°í˜ì´ìŠ¤)  â†’  JPAê°€ ìë™ ìƒì„±í•œ êµ¬í˜„ì²´  â†’  Database
 
-//Repository (Interface): °³¹ßÀÚ´Â ±¸Çö ÄÚµå ¾øÀÌ ÀÎÅÍÆäÀÌ½º¸¸ Á¤ÀÇ
-//Spring Data JPA (Implementation): ¾ÖÇÃ¸®ÄÉÀÌ¼Ç ·Îµù ½ÃÁ¡(Runtime)¿¡ Dynamic Proxy(µ¿Àû ÇÁ·Ï½Ã) ±â¼úÀ» »ç¿ëÇØ, ÇØ´ç ÀÎÅÍÆäÀÌ½º¸¦ ±¸ÇöÇÑ Å¬·¡½º(°´Ã¼)¸¦ ¸Ş¸ğ¸®¿¡ ÀÚµ¿À¸·Î »ı¼º
-//Dependency Injection: »ı¼ºµÈ ÀÌ ÇÁ·Ï½Ã °´Ã¼°¡ Service¿¡ ÁÖÀÔ(DI)
-//Execution: Service°¡ ¸Ş¼­µå¸¦ È£ÃâÇÏ¸é, ½ÇÁ¦·Î´Â ½ºÇÁ¸µÀÌ ¸¸µç ÇÁ·Ï½Ã °´Ã¼°¡ ½ÇÇàµÇ¾î ³»ºÎÀûÀ¸·Î SQLÀ» »ı¼ºÇÏ°í DB¿¡ ¿äÃ»
+//Repository (Interface): ê°œë°œìëŠ” êµ¬í˜„ ì½”ë“œ ì—†ì´ ì¸í„°í˜ì´ìŠ¤ë§Œ ì •ì˜
+//Spring Data JPA (Implementation): ì• í”Œë¦¬ì¼€ì´ì…˜ ë¡œë”© ì‹œì (Runtime)ì— Dynamic Proxy(ë™ì  í”„ë¡ì‹œ) ê¸°ìˆ ì„ ì‚¬ìš©í•´, í•´ë‹¹ ì¸í„°í˜ì´ìŠ¤ë¥¼ êµ¬í˜„í•œ í´ë˜ìŠ¤(ê°ì²´)ë¥¼ ë©”ëª¨ë¦¬ì— ìë™ìœ¼ë¡œ ìƒì„±
+//Dependency Injection: ìƒì„±ëœ ì´ í”„ë¡ì‹œ ê°ì²´ê°€ Serviceì— ì£¼ì…(DI)
+//Execution: Serviceê°€ ë©”ì„œë“œë¥¼ í˜¸ì¶œí•˜ë©´, ì‹¤ì œë¡œëŠ” ìŠ¤í”„ë§ì´ ë§Œë“  í”„ë¡ì‹œ ê°ì²´ê°€ ì‹¤í–‰ë˜ì–´ ë‚´ë¶€ì ìœ¼ë¡œ SQLì„ ìƒì„±í•˜ê³  DBì— ìš”ì²­
 
 /*
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
-    //                                               ¡è      ¡è
-    //                                           Entity   PK Å¸ÀÔ
+    //                                               â†‘      â†‘
+    //                                           Entity   PK íƒ€ì…
 }
-ÀÌ·± ¹æ½ÄÀ¸·Î ÀûÀ½
+ì´ëŸ° ë°©ì‹ìœ¼ë¡œ ì ìŒ
 
-JpaRepository°¡ Á¦°øÇÏ´Â ±âº» ¸Ş¼­µå
-¸Ş¼­µå	            ¼³¸í
-save(entity)	    ÀúÀå/¼öÁ¤
-findById(id)	    ID·Î Á¶È¸ (Optional ¹İÈ¯)
-findAll()	        ÀüÃ¼ Á¶È¸
-delete(entity)	    »èÁ¦
-deleteById(id)	    ID·Î »èÁ¦
-existsById(id)	    Á¸Àç ¿©ºÎ È®ÀÎ
-count()	            ÀüÃ¼ °³¼ö
+JpaRepositoryê°€ ì œê³µí•˜ëŠ” ê¸°ë³¸ ë©”ì„œë“œ
+ë©”ì„œë“œ	            ì„¤ëª…
+save(entity)	    ì €ì¥/ìˆ˜ì •
+findById(id)	    IDë¡œ ì¡°íšŒ (Optional ë°˜í™˜)
+findAll()	        ì „ì²´ ì¡°íšŒ
+delete(entity)	    ì‚­ì œ
+deleteById(id)	    IDë¡œ ì‚­ì œ
+existsById(id)	    ì¡´ì¬ ì—¬ë¶€ í™•ì¸
+count()	            ì „ì²´ ê°œìˆ˜
 
-¸Ş¼­µå ÀÌ¸§ ±â¹İ Äõ¸® (Query Method)
-¸Ş¼­µå ÀÌ¸§¸¸ ÀÛ¼ºÇÏ¸é JPA°¡ ÀÚµ¿À¸·Î Äõ¸®¸¦ »ı¼º
+ë©”ì„œë“œ ì´ë¦„ ê¸°ë°˜ ì¿¼ë¦¬ (Query Method)
+ë©”ì„œë“œ ì´ë¦„ë§Œ ì‘ì„±í•˜ë©´ JPAê°€ ìë™ìœ¼ë¡œ ì¿¼ë¦¬ë¥¼ ìƒì„±
 
-// findBy + ÇÊµå¸í
+// findBy + í•„ë“œëª…
 Optional<User> findByEmail(String email);
-// ¡æ SELECT * FROM users WHERE email = ?
+// â†’ SELECT * FROM users WHERE email = ?
 
-// findBy + ÇÊµå¸í + And + ÇÊµå¸í
+// findBy + í•„ë“œëª… + And + í•„ë“œëª…
 List<User> findBySajuElementAndZodiacSign(String element, String sign);
-// ¡æ SELECT * FROM users WHERE saju_element = ? AND zodiac_sign = ?
+// â†’ SELECT * FROM users WHERE saju_element = ? AND zodiac_sign = ?
 
 // OrderBy
 List<User> findByProviderOrderByCreatedAtDesc(String provider);
-// ¡æ SELECT * FROM users WHERE provider = ? ORDER BY created_at DESC
+// â†’ SELECT * FROM users WHERE provider = ? ORDER BY created_at DESC
 
-ÀÌ·±½ÄÀ¸·Î SpringÀº sql¹®À» ³¯¸°´Ù.
+ì´ëŸ°ì‹ìœ¼ë¡œ Springì€ sqlë¬¸ì„ ë‚ ë¦°ë‹¤.
 
-Å°¿öµå ¸ñ·Ï
-Å°¿öµå	            ¿¹½Ã	                        SQL
+í‚¤ì›Œë“œ ëª©ë¡
+í‚¤ì›Œë“œ	            ì˜ˆì‹œ	                        SQL
 And	                findByNameAndAge	        WHERE name = ? AND age = ?
 Or	                findByNameOrAge	            WHERE name = ? OR age = ?
 Between	            findByAgeBetween	        WHERE age BETWEEN ? AND ?
@@ -79,9 +79,9 @@ Not	                findByNameNot	            WHERE name != ?
 IsNull	            findByNameIsNull	        WHERE name IS NULL
 
 
-@Query ¾î³ëÅ×ÀÌ¼Ç (JPQL)
-º¹ÀâÇÑ Äõ¸®´Â Á÷Á¢ ÀÛ¼º
-ÀÌ·±½ÄÀ¸·Î ÀÛ¼ºÇÑ´Ù
+@Query ì–´ë…¸í…Œì´ì…˜ (JPQL)
+ë³µì¡í•œ ì¿¼ë¦¬ëŠ” ì§ì ‘ ì‘ì„±
+ì´ëŸ°ì‹ìœ¼ë¡œ ì‘ì„±í•œë‹¤
 
 @Query("SELECT u FROM User u WHERE u.createdAt >= :date")
 List<User> findRecentUsers(@Param("date") LocalDateTime date);
@@ -91,7 +91,7 @@ List<User> searchByEmail(@Param("keyword") String keyword);
 
 
 
-Native Query (¼ø¼ö SQL)Àº ÀÌ·±½ÄÀ¸·Î ÀÛ¼º
+Native Query (ìˆœìˆ˜ SQL)ì€ ì´ëŸ°ì‹ìœ¼ë¡œ ì‘ì„±
 
 @Query(value = "SELECT * FROM users WHERE created_at >= :date", nativeQuery = true)
 List<User> findRecentUsersNative(@Param("date") LocalDateTime date);
@@ -108,30 +108,30 @@ import java.util.Optional;
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
 
-    // ÀÌ¸ŞÀÏ·Î »ç¿ëÀÚ Á¶È¸
+    // ì´ë©”ì¼ë¡œ ì‚¬ìš©ì ì¡°íšŒ
     Optional<User> findByEmail(String email);
 
-    // ÀÌ¸ŞÀÏ Á¸Àç ¿©ºÎ È®ÀÎ
+    // ì´ë©”ì¼ ì¡´ì¬ ì—¬ë¶€ í™•ì¸
     boolean existsByEmail(String email);
 
-    // ´Ğ³×ÀÓÀ¸·Î »ç¿ëÀÚ Á¶È¸
+    // ë‹‰ë„¤ì„ìœ¼ë¡œ ì‚¬ìš©ì ì¡°íšŒ
     Optional<User> findByNickname(String nickname);
 
-    // ´Ğ³×ÀÓ Á¸Àç ¿©ºÎ È®ÀÎ
+    // ë‹‰ë„¤ì„ ì¡´ì¬ ì—¬ë¶€ í™•ì¸
     boolean existsByNickname(String nickname);
 
-    // »çÁÖ ¿ÀÇàÀ¸·Î »ç¿ëÀÚ ¸ñ·Ï Á¶È¸
+    // ì‚¬ì£¼ ì˜¤í–‰ìœ¼ë¡œ ì‚¬ìš©ì ëª©ë¡ ì¡°íšŒ
     List<User> findBySajuElement(String sajuElement);
 
-    // ¶ì·Î »ç¿ëÀÚ ¸ñ·Ï Á¶È¸
+    // ë ë¡œ ì‚¬ìš©ì ëª©ë¡ ì¡°íšŒ
     List<User> findByZodiacSign(String zodiacSign);
 
-    // Provider·Î »ç¿ëÀÚ ¸ñ·Ï Á¶È¸
+    // Providerë¡œ ì‚¬ìš©ì ëª©ë¡ ì¡°íšŒ
     List<User> findByProvider(String provider);
 
-    // ´Ğ³×ÀÓ °Ë»ö (ºÎºĞ ÀÏÄ¡)
+    // ë‹‰ë„¤ì„ ê²€ìƒ‰ (ë¶€ë¶„ ì¼ì¹˜)
     List<User> findByNicknameContaining(String keyword);
 
-    // ÀÌ¸ŞÀÏ°ú Provider·Î Á¶È¸ (OAuth ·Î±×ÀÎ¿ë)
+    // ì´ë©”ì¼ê³¼ Providerë¡œ ì¡°íšŒ (OAuth ë¡œê·¸ì¸ìš©)
     Optional<User> findByEmailAndProvider(String email, String provider);
 }

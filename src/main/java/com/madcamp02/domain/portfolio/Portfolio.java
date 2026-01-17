@@ -38,7 +38,7 @@ public class Portfolio {
     @Column(name = "avg_price", nullable = false, precision = 19, scale = 4)
     private BigDecimal avgPrice;
 
-    // ========== »ı¼ºÀÚ ==========
+    // ========== ìƒì„±ì ==========
 
     @Builder
     public Portfolio(User user, String ticker, Integer quantity, BigDecimal avgPrice) {
@@ -48,11 +48,11 @@ public class Portfolio {
         this.avgPrice = avgPrice;
     }
 
-    // ========== ºñÁî´Ï½º ¸Ş¼­µå ==========
+    // ========== ë¹„ì¦ˆë‹ˆìŠ¤ ë©”ì„œë“œ ==========
 
     /**
-     * ¸Å¼ö ½Ã Æò´Ü°¡ Àç°è»ê
-     * »õ Æò´Ü°¡ = (±âÁ¸¼ö·® ¡¿ ±âÁ¸Æò´Ü°¡ + ½Å±Ô¼ö·® ¡¿ Ã¼°á°¡) / (±âÁ¸¼ö·® + ½Å±Ô¼ö·®)
+     * ë§¤ìˆ˜ ì‹œ í‰ë‹¨ê°€ ì¬ê³„ì‚°
+     * ìƒˆ í‰ë‹¨ê°€ = (ê¸°ì¡´ìˆ˜ëŸ‰ Ã— ê¸°ì¡´í‰ë‹¨ê°€ + ì‹ ê·œìˆ˜ëŸ‰ Ã— ì²´ê²°ê°€) / (ê¸°ì¡´ìˆ˜ëŸ‰ + ì‹ ê·œìˆ˜ëŸ‰)
      */
     public void addQuantity(Integer newQuantity, BigDecimal newPrice) {
         BigDecimal currentValue = this.avgPrice.multiply(BigDecimal.valueOf(this.quantity));
@@ -68,17 +68,17 @@ public class Portfolio {
     }
 
     /**
-     * ¸Åµµ ½Ã ¼ö·® Â÷°¨
+     * ë§¤ë„ ì‹œ ìˆ˜ëŸ‰ ì°¨ê°
      */
     public void subtractQuantity(Integer sellQuantity) {
         if (this.quantity < sellQuantity) {
-            throw new IllegalArgumentException("º¸À¯ ¼ö·®ÀÌ ºÎÁ·ÇÕ´Ï´Ù.");
+            throw new IllegalArgumentException("ë³´ìœ  ìˆ˜ëŸ‰ì´ ë¶€ì¡±í•©ë‹ˆë‹¤.");
         }
         this.quantity -= sellQuantity;
     }
 
     /**
-     * ¼ö·®ÀÌ 0ÀÎÁö È®ÀÎ
+     * ìˆ˜ëŸ‰ì´ 0ì¸ì§€ í™•ì¸
      */
     public boolean isEmpty() {
         return this.quantity == 0;

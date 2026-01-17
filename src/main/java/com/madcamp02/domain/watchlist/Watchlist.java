@@ -34,8 +34,6 @@ public class Watchlist {
     @Column(name = "added_at", nullable = false, updatable = false)
     private LocalDateTime addedAt;
 
-    // ========== »ý¼ºÀÚ ==========
-
     @Builder
     public Watchlist(User user, String ticker) {
         this.user = user;
