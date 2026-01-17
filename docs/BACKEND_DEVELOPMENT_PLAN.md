@@ -208,6 +208,7 @@ MadCamp02 백엔드는 다음 핵심 기능을 담당합니다:
 |-----|------|
 | Finnhub | 미국 주식 실시간 데이터 |
 | Google OAuth2 | 소셜 로그인 |
+| 🆕 Kakao OAuth2 | 소셜 로그인 (카카오) |
 
 ---
 
@@ -258,6 +259,7 @@ MadCamp02 백엔드는 다음 핵심 기능을 담당합니다:
 │   ├── 📁 dto/                           # Data Transfer Objects
 │   │   ├── 📁 request/
 │   │   │   ├── LoginRequest.java
+│   │   │   ├── RefreshRequest.java        # ✅ 토큰 갱신 요청
 │   │   │   ├── OnboardingRequest.java
 │   │   │   ├── TradeOrderRequest.java
 │   │   │   ├── GachaRequest.java
@@ -328,9 +330,12 @@ MadCamp02 백엔드는 다음 핵심 기능을 담당합니다:
 │   │
 │   ├── 📁 exception/                     # 예외 처리
 │   │   ├── GlobalExceptionHandler.java   # 전역 예외 핸들러
-│   │   ├── BusinessException.java        # 비즈니스 예외
+│   │   ├── ErrorResponse.java            # ✅ 에러 응답 DTO (팩토리 메서드 포함)
+│   │   ├── BusinessException.java        # 비즈니스 예외 (부모 클래스)
 │   │   ├── AuthException.java            # 인증 예외
 │   │   ├── TradeException.java           # 거래 예외
+│   │   ├── GameException.java            # ✅ 게임/가챠 예외
+│   │   ├── UserException.java            # ✅ 사용자 예외
 │   │   └── ErrorCode.java                # 에러 코드 enum
 │   │
 │   ├── 📁 util/                          # 유틸리티
@@ -362,8 +367,9 @@ MadCamp02 백엔드는 다음 핵심 기능을 담당합니다:
 │
 ├── build.gradle                          # Gradle 빌드
 ├── settings.gradle
-├── Dockerfile                            # Docker 이미지
-└── docker-compose.yml                    # 개발 환경
+├── Dockerfile                            # Docker 이미지 (Multi-stage, 비루트 사용자)
+├── docker-compose.yml                    # 개발 환경
+└── .dockerignore                         # ✅ Docker 빌드 제외 파일
 ```
 
 ### 4.2 FastAPI 프로젝트 구조
@@ -410,9 +416,10 @@ MadCamp02 백엔드는 다음 핵심 기능을 담당합니다:
 ├──────────────────────────────────────────────────────────────────────┤
 │ PK │ user_id        │ BIGSERIAL                                      │
 │    │ email          │ VARCHAR(255) NOT NULL UNIQUE                   │
+│    │ password       │ VARCHAR(255)          # 🆕 일반 회원용 (BCrypt) │
 │    │ nickname       │ VARCHAR(50) NOT NULL                           │
-│    │ provider       │ VARCHAR(20) DEFAULT 'GOOGLE'                   │
-│    │ birth_date     │ DATE NOT NULL                                  │
+│    │ provider       │ VARCHAR(20) DEFAULT 'LOCAL' # LOCAL/GOOGLE/KAKAO│
+│    │ birth_date     │ DATE                  # NULL 허용 (온보딩에서 입력)│
 │    │ saju_element   │ VARCHAR(10)                                    │
 │    │ zodiac_sign    │ VARCHAR(20)                                    │
 │    │ avatar_url     │ TEXT                                           │
@@ -543,7 +550,10 @@ MadCamp02 백엔드는 다음 핵심 기능을 담당합니다:
 
 | 메서드 | 경로 | 설명 | 요청 DTO | 응답 DTO |
 |--------|------|------|---------|---------|
-| POST | `/login` | OAuth 로그인 | `LoginRequest` | `AuthResponse` |
+| POST | `/signup` | 🆕 일반 회원가입 | `SignupRequest` | `AuthResponse` |
+| POST | `/login` | 🆕 일반 로그인 (이메일/비밀번호) | `EmailLoginRequest` | `AuthResponse` |
+| POST | `/oauth/google` | Google OAuth 로그인 | `OAuthLoginRequest` | `AuthResponse` |
+| POST | `/oauth/kakao` | 🆕 카카오 OAuth 로그인 | `OAuthLoginRequest` | `AuthResponse` |
 | POST | `/refresh` | 토큰 갱신 | `RefreshRequest` | `AuthResponse` |
 | POST | `/logout` | 로그아웃 | - | - |
 | GET | `/me` | 현재 사용자 | - | `UserResponse` |
@@ -623,8 +633,17 @@ MadCamp02 백엔드는 다음 핵심 기능을 담당합니다:
 
 ```
 📁 dto/request/
-├── LoginRequest
-│   └── provider: String, idToken: String
+├── SignupRequest                        # 🆕 일반 회원가입
+│   └── email: String, password: String, nickname: String
+│
+├── EmailLoginRequest                    # 🆕 일반 로그인
+│   └── email: String, password: String
+│
+├── OAuthLoginRequest                    # OAuth 로그인 (Google, Kakao)
+│   └── provider: String, idToken: String (또는 authorizationCode)
+│
+├── RefreshRequest
+│   └── refreshToken: String
 │
 ├── OnboardingRequest
 │   └── nickname: String, birthDate: LocalDate
@@ -692,43 +711,82 @@ MadCamp02 백엔드는 다음 핵심 기능을 담당합니다:
 
 ## 7. 인증 및 보안
 
-### 7.1 인증 흐름
+### 7.1 인증 방식 (3가지)
+
+| 방식 | provider | 설명 |
+|------|----------|------|
+| 🆕 일반 회원가입/로그인 | `LOCAL` | 이메일 + 비밀번호 (BCrypt 암호화) |
+| Google OAuth | `GOOGLE` | Google ID Token 검증 |
+| 🆕 Kakao OAuth | `KAKAO` | Kakao Access Token / Authorization Code |
+
+### 7.2 일반 회원가입/로그인 흐름 🆕
 
 ```
-┌─────────┐         ┌─────────┐         ┌─────────┐         ┌─────────┐
-│ Client  │         │ Google  │         │ Backend │         │   DB    │
-└────┬────┘         └────┬────┘         └────┬────┘         └────┬────┘
-     │                   │                   │                   │
-     │ Google Login      │                   │                   │
-     │──────────────────▶│                   │                   │
-     │                   │                   │                   │
-     │   ID Token        │                   │                   │
-     │◀──────────────────│                   │                   │
-     │                   │                   │                   │
-     │      POST /auth/login (ID Token)      │                   │
-     │──────────────────────────────────────▶│                   │
-     │                   │                   │                   │
-     │                   │                   │ Verify Token      │
-     │                   │◀──────────────────│                   │
-     │                   │                   │                   │
-     │                   │   Token Valid     │                   │
-     │                   │──────────────────▶│                   │
-     │                   │                   │                   │
-     │                   │                   │ Find/Create User  │
-     │                   │                   │──────────────────▶│
-     │                   │                   │                   │
-     │                   │                   │     User Data     │
-     │                   │                   │◀──────────────────│
-     │                   │                   │                   │
-     │                   │                   │ Generate JWT      │
-     │                   │                   │ (Access+Refresh)  │
-     │                   │                   │                   │
-     │     AuthResponse (Access, Refresh)    │                   │
-     │◀──────────────────────────────────────│                   │
-     │                   │                   │                   │
+┌─────────┐                          ┌─────────┐         ┌─────────┐
+│ Client  │                          │ Backend │         │   DB    │
+└────┬────┘                          └────┬────┘         └────┬────┘
+     │                                    │                   │
+     │ ────── 회원가입 (/auth/signup) ───────────────────────────────
+     │                                    │                   │
+     │  POST /auth/signup                 │                   │
+     │  {email, password, nickname}       │                   │
+     │───────────────────────────────────▶│                   │
+     │                                    │                   │
+     │                                    │ 이메일 중복 체크   │
+     │                                    │──────────────────▶│
+     │                                    │                   │
+     │                                    │ BCrypt 암호화     │
+     │                                    │ User + Wallet 생성 │
+     │                                    │──────────────────▶│
+     │                                    │                   │
+     │      AuthResponse (JWT 발급)       │                   │
+     │◀───────────────────────────────────│                   │
+     │                                    │                   │
+     │ ────── 로그인 (/auth/login) ──────────────────────────────────
+     │                                    │                   │
+     │  POST /auth/login                  │                   │
+     │  {email, password}                 │                   │
+     │───────────────────────────────────▶│                   │
+     │                                    │                   │
+     │                                    │ 사용자 조회       │
+     │                                    │──────────────────▶│
+     │                                    │                   │
+     │                                    │ BCrypt 비교       │
+     │                                    │                   │
+     │      AuthResponse (JWT 발급)       │                   │
+     │◀───────────────────────────────────│                   │
 ```
 
-### 7.2 JWT 구조
+### 7.3 OAuth 로그인 흐름 (Google / Kakao)
+
+```
+┌─────────┐    ┌────────────────┐    ┌─────────┐         ┌─────────┐
+│ Client  │    │ Google/Kakao   │    │ Backend │         │   DB    │
+└────┬────┘    └───────┬────────┘    └────┬────┘         └────┬────┘
+     │                 │                   │                   │
+     │  OAuth 로그인   │                   │                   │
+     │────────────────▶│                   │                   │
+     │                 │                   │                   │
+     │  ID/Access Token│                   │                   │
+     │◀────────────────│                   │                   │
+     │                 │                   │                   │
+     │   POST /auth/oauth/google (또는 /kakao)                 │
+     │   {provider, idToken}               │                   │
+     │────────────────────────────────────▶│                   │
+     │                 │                   │                   │
+     │                 │                   │ Token 검증       │
+     │                 │◀──────────────────│                   │
+     │                 │   이메일 정보     │                   │
+     │                 │──────────────────▶│                   │
+     │                 │                   │                   │
+     │                 │                   │ Find/Create User  │
+     │                 │                   │──────────────────▶│
+     │                 │                   │                   │
+     │     AuthResponse (JWT 발급)         │                   │
+     │◀────────────────────────────────────│                   │
+```
+
+### 7.4 JWT 구조
 
 ```java
 // Access Token Payload
@@ -750,19 +808,24 @@ MadCamp02 백엔드는 다음 핵심 기능을 담당합니다:
 }
 ```
 
-### 7.3 Security Config
+### 7.5 Security Config
 
 ```
 SecurityFilterChain 설정:
 ├── CSRF 비활성화 (REST API)
 ├── 세션 Stateless
 ├── CORS 설정
-├── 공개 엔드포인트: /auth/login, /auth/refresh
+├── 공개 엔드포인트:
+│   ├── /auth/signup         # 🆕 회원가입
+│   ├── /auth/login          # 🆕 일반 로그인
+│   ├── /auth/oauth/google   # Google 로그인
+│   ├── /auth/oauth/kakao    # 🆕 Kakao 로그인
+│   └── /auth/refresh        # 토큰 갱신
 ├── 보호 엔드포인트: 나머지 전체
 └── JWT 필터 추가
 ```
 
-### 7.4 보안 체크리스트
+### 7.6 보안 체크리스트
 
 | 항목 | 구현 방법 |
 |------|----------|
@@ -771,7 +834,7 @@ SecurityFilterChain 설정:
 | CSRF | Stateless (비활성화) |
 | Rate Limiting | Bucket4j 또는 Nginx |
 | HTTPS | TLS 1.3 강제 |
-| Password | OAuth2만 사용 (저장 없음) |
+| Password | 🆕 BCrypt 암호화 (일반 회원), OAuth는 저장 없음 |
 
 ---
 
@@ -1371,60 +1434,119 @@ GitHub Actions:
 
 ### A. 에러 코드
 
+> 에러 응답은 `ErrorResponse` DTO를 통해 일관된 형식으로 반환됩니다.
+> 
+> ```json
+> {
+>   "timestamp": "2026-01-17T12:00:00",
+>   "status": 400,
+>   "error": "TRADE_001",
+>   "message": "잔고가 부족합니다."
+> }
+> ```
+
 | 코드 | 설명 | HTTP 상태 |
 |------|------|----------|
+| **인증 (AUTH)** |||
 | AUTH_001 | 토큰 만료 | 401 |
 | AUTH_002 | 유효하지 않은 토큰 | 401 |
 | AUTH_003 | 권한 없음 | 403 |
+| AUTH_004 | 사용자 없음 | 404 |
+| AUTH_005 | Google 토큰 검증 실패 | 401 |
+| AUTH_006 | 🆕 Kakao 토큰 검증 실패 | 401 |
+| AUTH_007 | 🆕 비밀번호 불일치 | 401 |
+| AUTH_008 | 🆕 이메일 중복 (회원가입) | 409 |
+| **거래 (TRADE)** |||
 | TRADE_001 | 잔고 부족 | 400 |
 | TRADE_002 | 보유 수량 부족 | 400 |
 | TRADE_003 | 거래 시간 외 | 400 |
 | TRADE_004 | 유효하지 않은 종목 | 400 |
+| **게임 (GAME)** |||
 | GAME_001 | 코인 부족 | 400 |
-| GAME_002 | 이미 보유한 아이템 | 400 |
+| GAME_002 | 이미 보유한 아이템 | 409 |
+| GAME_003 | 아이템 없음 | 404 |
+| **사용자 (USER)** |||
 | USER_001 | 사용자 없음 | 404 |
+| USER_002 | 이미 존재하는 사용자 | 409 |
+| **서버 (SERVER)** |||
 | SERVER_001 | 내부 서버 오류 | 500 |
+| SERVER_002 | 외부 API 호출 실패 | 503 |
+| **검증 (VALIDATION)** |||
+| VALIDATION_ERROR | 입력값 검증 실패 | 400 |
+| BIND_ERROR | 요청 데이터 바인딩 실패 | 400 |
 
 ### B. 의존성 (build.gradle)
 
 ```groovy
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '4.0.1'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
 dependencies {
-    // Spring Boot
-    implementation 'org.springframework.boot:spring-boot-starter-web'
+    // Spring Boot Core
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
-    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'org.springframework.boot:spring-boot-starter-flyway'
+    implementation 'org.flywaydb:flyway-database-postgresql'
     
-    // JWT
+    // OAuth2 & JWT
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+    implementation 'com.google.api-client:google-api-client:2.2.0'
     implementation 'io.jsonwebtoken:jjwt-api:0.12.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.5'
     
     // Database
     runtimeOnly 'org.postgresql:postgresql'
-    implementation 'org.flywaydb:flyway-core'
     
     // Utility
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
-    implementation 'org.mapstruct:mapstruct:1.5.5.Final'
-    annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
     
-    // API Documentation
+    // API Documentation & Monitoring
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
     
     // Testing
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
-    testImplementation 'org.testcontainers:postgresql'
-    testImplementation 'org.testcontainers:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
+```
+
+### C. Dockerfile 구성
+
+```dockerfile
+# Multi-stage 빌드 (이미지 최적화)
+FROM eclipse-temurin:21-jdk AS builder
+# ... 빌드 단계 ...
+
+FROM eclipse-temurin:21-jre
+# curl 설치 (HEALTHCHECK용)
+RUN apt-get update && apt-get install -y --no-install-recommends curl
+
+# 비루트 사용자 생성 (보안)
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+USER appuser
+
+# 환경 변수
+ENV JAVA_OPTS="-Xms512m -Xmx1024m"
+ENV SPRING_PROFILES_ACTIVE="prod"
+ENV TZ="Asia/Seoul"
+
+# 헬스체크 (actuator 사용)
+HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8080/actuator/health || exit 1
 ```
 
 ---
 
-**문서 버전:** 1.0  
-**최종 수정일:** 2026-01-16  
+**문서 버전:** 2.1 (🆕 카카오 OAuth, 일반 회원가입/로그인 추가)  
+**최종 수정일:** 2026-01-17  
 **작성자:** MadCamp02 개발팀
