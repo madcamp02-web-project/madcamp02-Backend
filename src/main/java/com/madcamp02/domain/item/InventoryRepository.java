@@ -11,19 +11,19 @@ import java.util.Optional;
 @Repository
 public interface InventoryRepository extends JpaRepository<Inventory, Long> {
 
-    // »ç¿ëÀÚÀÇ ÀüÃ¼ ÀÎº¥Åä¸® Á¶È¸
+    // ì‚¬ìš©ìì˜ ì „ì²´ ì¸ë²¤í† ë¦¬ ì¡°íšŒ
     List<Inventory> findByUserUserId(Long userId);
 
-    // »ç¿ëÀÚÀÇ Æ¯Á¤ ¾ÆÀÌÅÛ º¸À¯ ¿©ºÎ
+    // ì‚¬ìš©ìì˜ íŠ¹ì • ì•„ì´í…œ ë³´ìœ  ì—¬ë¶€
     Optional<Inventory> findByUserUserIdAndItemItemId(Long userId, Long itemId);
 
-    // ¾ÆÀÌÅÛ º¸À¯ ¿©ºÎ È®ÀÎ
+    // ì•„ì´í…œ ë³´ìœ  ì—¬ë¶€ í™•ì¸
     boolean existsByUserUserIdAndItemItemId(Long userId, Long itemId);
 
-    // »ç¿ëÀÚÀÇ ÀåÂøµÈ ¾ÆÀÌÅÛ ¸ñ·Ï
+    // ì‚¬ìš©ìì˜ ì¥ì°©ëœ ì•„ì´í…œ ëª©ë¡
     List<Inventory> findByUserUserIdAndIsEquippedTrue(Long userId);
 
-    // »ç¿ëÀÚÀÇ Æ¯Á¤ Ä«Å×°í¸® ÀåÂø ¾ÆÀÌÅÛ
+    // ì‚¬ìš©ìì˜ íŠ¹ì • ì¹´í…Œê³ ë¦¬ ì¥ì°© ì•„ì´í…œ
     @Query("SELECT inv FROM Inventory inv " +
             "WHERE inv.user.userId = :userId " +
             "AND inv.item.category = :category " +
@@ -33,7 +33,7 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
             @Param("category") Item.Category category
     );
 
-    // »ç¿ëÀÚÀÇ Ä«Å×°í¸®º° ¾ÆÀÌÅÛ ¸ñ·Ï
+    // ì‚¬ìš©ìì˜ ì¹´í…Œê³ ë¦¬ë³„ ì•„ì´í…œ ëª©ë¡
     @Query("SELECT inv FROM Inventory inv " +
             "WHERE inv.user.userId = :userId " +
             "AND inv.item.category = :category")
@@ -42,7 +42,7 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
             @Param("category") Item.Category category
     );
 
-    // »ç¿ëÀÚÀÇ µî±Şº° ¾ÆÀÌÅÛ ¸ñ·Ï
+    // ì‚¬ìš©ìì˜ ë“±ê¸‰ë³„ ì•„ì´í…œ ëª©ë¡
     @Query("SELECT inv FROM Inventory inv " +
             "WHERE inv.user.userId = :userId " +
             "AND inv.item.rarity = :rarity")
@@ -51,9 +51,9 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
             @Param("rarity") Item.Rarity rarity
     );
 
-    // »ç¿ëÀÚÀÇ ¾ÆÀÌÅÛ °³¼ö
+    // ì‚¬ìš©ìì˜ ì•„ì´í…œ ê°œìˆ˜
     long countByUserUserId(Long userId);
 
-    // Æ¯Á¤ ¾ÆÀÌÅÛÀ» º¸À¯ÇÑ »ç¿ëÀÚ ¼ö
+    // íŠ¹ì • ì•„ì´í…œì„ ë³´ìœ í•œ ì‚¬ìš©ì ìˆ˜
     long countByItemItemId(Long itemId);
 }

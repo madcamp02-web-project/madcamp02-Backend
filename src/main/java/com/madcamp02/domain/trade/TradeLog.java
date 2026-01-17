@@ -56,8 +56,6 @@ public class TradeLog {
         BUY, SELL
     }
 
-    // ========== »ý¼ºÀÚ ==========
-
     @Builder
     public TradeLog(User user, String ticker, TradeType tradeType,
                     BigDecimal price, Integer quantity, BigDecimal totalAmount,

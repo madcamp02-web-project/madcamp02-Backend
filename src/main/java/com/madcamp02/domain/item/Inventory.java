@@ -38,7 +38,7 @@ public class Inventory {
     @Column(name = "acquired_at", nullable = false, updatable = false)
     private LocalDateTime acquiredAt;
 
-    // ========== »ı¼ºÀÚ ==========
+    // ========== ìƒì„±ì ==========
 
     @Builder
     public Inventory(User user, Item item) {
@@ -48,7 +48,7 @@ public class Inventory {
         this.acquiredAt = LocalDateTime.now();
     }
 
-    // ========== ºñÁî´Ï½º ¸Ş¼­µå ==========
+    // ========== ë¹„ì¦ˆë‹ˆìŠ¤ ë©”ì„œë“œ ==========
 
     public void equip() {
         this.isEquipped = true;

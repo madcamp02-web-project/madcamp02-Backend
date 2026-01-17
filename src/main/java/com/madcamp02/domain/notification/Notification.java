@@ -43,15 +43,15 @@ public class Notification {
     // ========== Enum ==========
 
     public enum NotificationType {
-        TRADE_COMPLETE,   // °Å·¡ Ã¼°á
-        PRICE_ALERT,      // °¡°İ ¾Ë¸²
-        GACHA_RESULT,     // °¡Ã­ °á°ú
-        RANKING_CHANGE,   // ·©Å· º¯µ¿
-        DIVIDEND_ALERT,   // ¹è´ç ¾Ë¸²
-        SYSTEM            // ½Ã½ºÅÛ ¾Ë¸²
+        TRADE_COMPLETE,   // ê±°ë˜ ì²´ê²°
+        PRICE_ALERT,      // ê°€ê²© ì•Œë¦¼
+        GACHA_RESULT,     // ê°€ì±  ê²°ê³¼
+        RANKING_CHANGE,   // ë­í‚¹ ë³€ë™
+        DIVIDEND_ALERT,   // ë°°ë‹¹ ì•Œë¦¼
+        SYSTEM            // ì‹œìŠ¤í…œ ì•Œë¦¼
     }
 
-    // ========== »ı¼ºÀÚ ==========
+    // ========== ìƒì„±ì ==========
 
     @Builder
     public Notification(User user, NotificationType type, String title, String message) {
@@ -63,7 +63,7 @@ public class Notification {
         this.createdAt = LocalDateTime.now();
     }
 
-    // ========== ºñÁî´Ï½º ¸Ş¼­µå ==========
+    // ========== ë¹„ì¦ˆë‹ˆìŠ¤ ë©”ì„œë“œ ==========
 
     public void markAsRead() {
         this.isRead = true;

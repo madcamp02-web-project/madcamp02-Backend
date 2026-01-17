@@ -1,10 +1,10 @@
 package com.madcamp02.security;
 
-//Spring Security È¯°æ¿¡¼­ JWT(JSON Web Token)¸¦ »ç¿ëÇÏ¿©
-//»ç¿ëÀÚÀÇ ¿äÃ»À» ÀÎÁõ(Authentication)ÇÏ´Â ÇÙ½É ÇÊÅÍ Å¬·¡½º
+//Spring Security í™˜ê²½ì—ì„œ JWT(JSON Web Token)ë¥¼ ì‚¬ìš©í•˜ì—¬
+//ì‚¬ìš©ìì˜ ìš”ì²­ì„ ì¸ì¦(Authentication)í•˜ëŠ” í•µì‹¬ í•„í„° í´ë˜ìŠ¤
 
-//Å¬¶óÀÌ¾ğÆ®°¡ º¸³½ ¿äÃ»ÀÇ Çì´õ(Header)¸¦ °¡·ÎÃ¤¼­ À¯È¿ÇÑ ÅäÅ«ÀÌ ÀÖ´ÂÁö È®ÀÎÇÏ°í,
-//À¯È¿ÇÏ´Ù¸é ÇØ´ç »ç¿ëÀÚ¸¦ ÀÎÁõµÈ »óÅÂ·Î ¸¸µé¾îÁÖ´Â ¿ªÇÒÀ» ÇÔ
+//í´ë¼ì´ì–¸íŠ¸ê°€ ë³´ë‚¸ ìš”ì²­ì˜ í—¤ë”(Header)ë¥¼ ê°€ë¡œì±„ì„œ ìœ íš¨í•œ í† í°ì´ ìˆëŠ”ì§€ í™•ì¸í•˜ê³ ,
+//ìœ íš¨í•˜ë‹¤ë©´ í•´ë‹¹ ì‚¬ìš©ìë¥¼ ì¸ì¦ëœ ìƒíƒœë¡œ ë§Œë“¤ì–´ì£¼ëŠ” ì—­í• ì„ í•¨
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -20,63 +20,63 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 
 @Slf4j
-@RequiredArgsConstructor //JwtTokenProvider¿¡¼­ ¼³¸íÇÔ
-//finalÀÌ ºÙÀº ÇÊµå(jwtTokenProvider)¿¡ ´ëÇÑ »ı¼ºÀÚ¸¦ ·Òº¹(Lombok)ÀÌ ÀÚµ¿À¸·Î ¸¸µé¾î ÀÇÁ¸¼ºÀ» ÁÖÀÔ(DI)
+@RequiredArgsConstructor //JwtTokenProviderì—ì„œ ì„¤ëª…í•¨
+//finalì´ ë¶™ì€ í•„ë“œ(jwtTokenProvider)ì— ëŒ€í•œ ìƒì„±ìë¥¼ ë¡¬ë³µ(Lombok)ì´ ìë™ìœ¼ë¡œ ë§Œë“¤ì–´ ì˜ì¡´ì„±ì„ ì£¼ì…(DI)
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
-    //OncePerRequestFilter »ó¼Ó: OncePerRequestFilter´Â HTTP ¿äÃ» ÇÏ³ª´ç µü ÇÑ ¹ø¸¸ ½ÇÇàµÇ´Â °ÍÀ» º¸ÀåÇÏ´Â ÇÊÅÍ·Î ÀÌ°É »ó¼ÓÇØ¼­ »ç¿ëÇÑ´Ù
+    //OncePerRequestFilter ìƒì†: OncePerRequestFilterëŠ” HTTP ìš”ì²­ í•˜ë‚˜ë‹¹ ë”± í•œ ë²ˆë§Œ ì‹¤í–‰ë˜ëŠ” ê²ƒì„ ë³´ì¥í•˜ëŠ” í•„í„°ë¡œ ì´ê±¸ ìƒì†í•´ì„œ ì‚¬ìš©í•œë‹¤
 
     private final JwtTokenProvider jwtTokenProvider;
-    //JWT ÅäÅ«À» »ı¼º, °ËÁõ, ÆÄ½ÌÇÏ´Â ·ÎÁ÷ÀÌ ´ã±ä º°µµÀÇ ÄÄÆ÷³ÍÆ®
+    //JWT í† í°ì„ ìƒì„±, ê²€ì¦, íŒŒì‹±í•˜ëŠ” ë¡œì§ì´ ë‹´ê¸´ ë³„ë„ì˜ ì»´í¬ë„ŒíŠ¸
 
 
-    //ÀÌ°Ô ÇÙ½É
-    //½ºÇÁ¸µ ½ÃÅ¥¸®Æ¼¿¡¼­ JWT·Î »ç¿ëÀÚ ÇÊÅÍ¸µÀ» Á÷Á¢ÀûÀ¸·Î ¼öÇàÇÏ´Â ¸Ş¼­µåÀÓ
-    //ÀÌ³à¼®ÀÌ JWT·Î »ç¿ëÀÚµéÀ» ÇÊÅÍ¸µÇÔ.
+    //ì´ê²Œ í•µì‹¬
+    //ìŠ¤í”„ë§ ì‹œíë¦¬í‹°ì—ì„œ JWTë¡œ ì‚¬ìš©ì í•„í„°ë§ì„ ì§ì ‘ì ìœ¼ë¡œ ìˆ˜í–‰í•˜ëŠ” ë©”ì„œë“œì„
+    //ì´ë…€ì„ì´ JWTë¡œ ì‚¬ìš©ìë“¤ì„ í•„í„°ë§í•¨.
     @Override
     protected void doFilterInternal(
             HttpServletRequest request,
             HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
 
-        // 1. Request Header¿¡¼­ JWT ÅäÅ« ÃßÃâ
+        // 1. Request Headerì—ì„œ JWT í† í° ì¶”ì¶œ
         String token = jwtTokenProvider.resolveToken(request);
-        //ÀÌ°É ½ÇÇàÇÒ °æ¿ì ÁÖ·Î Authorization Çì´õ¿¡¼­ Bearer·Î ½ÃÀÛÇÏ´Â ÅäÅ« ¹®ÀÚ¿­À» °¡Á®¿À°Ô µÊ
+        //ì´ê±¸ ì‹¤í–‰í•  ê²½ìš° ì£¼ë¡œ Authorization í—¤ë”ì—ì„œ Bearerë¡œ ì‹œì‘í•˜ëŠ” í† í° ë¬¸ìì—´ì„ ê°€ì ¸ì˜¤ê²Œ ë¨
 
-        // 2. ÅäÅ« À¯È¿¼º °Ë»ç
+        // 2. í† í° ìœ íš¨ì„± ê²€ì‚¬
         if (StringUtils.hasText(token) && jwtTokenProvider.validateToken(token)) {
-            //ÅäÅ«ÀÌ ºñ¾îÀÖÁö ¾ÊÀºÁö(hasText), ±×¸®°í À§Á¶µÇ°Å³ª ¸¸·áµÇÁö ¾Ê¾Ò´ÂÁö(validateToken) È®ÀÎ
+            //í† í°ì´ ë¹„ì–´ìˆì§€ ì•Šì€ì§€(hasText), ê·¸ë¦¬ê³  ìœ„ì¡°ë˜ê±°ë‚˜ ë§Œë£Œë˜ì§€ ì•Šì•˜ëŠ”ì§€(validateToken) í™•ì¸
 
-            // 3. ÅäÅ« Å¸ÀÔ È®ÀÎ (Access Token¸¸ Çã¿ë)
+            // 3. í† í° íƒ€ì… í™•ì¸ (Access Tokenë§Œ í—ˆìš©)
             String tokenType = jwtTokenProvider.getTokenType(token);
-            //ÀÌ ÇÊÅÍ´Â ¿ÀÁ÷ Access TokenÀ» °¡Áø ¿äÃ»¸¸ ÀÎÁõ Ã³¸®
-            //(Refresh TokenÀ» ÅëÇÑ Àç¹ß±ŞÀº º°µµ ·ÎÁ÷À¸·Î Ã³¸®µÊÀ» ¾Ï½Ã)
+            //ì´ í•„í„°ëŠ” ì˜¤ì§ Access Tokenì„ ê°€ì§„ ìš”ì²­ë§Œ ì¸ì¦ ì²˜ë¦¬
+            //(Refresh Tokenì„ í†µí•œ ì¬ë°œê¸‰ì€ ë³„ë„ ë¡œì§ìœ¼ë¡œ ì²˜ë¦¬ë¨ì„ ì•”ì‹œ)
 
             if ("ACCESS".equals(tokenType)) {
-                // 4. ÅäÅ«¿¡¼­ Authentication °´Ã¼ °¡Á®¿À±â
+                // 4. í† í°ì—ì„œ Authentication ê°ì²´ ê°€ì ¸ì˜¤ê¸°
                 Authentication authentication = jwtTokenProvider.getAuthentication(token);
 
-                // 5. SecurityContext¿¡ ÀúÀå
+                // 5. SecurityContextì— ì €ì¥
                 SecurityContextHolder.getContext().setAuthentication(authentication);
 
-                //Áï, ¿©±â¼­´Â ÅäÅ«¿¡¼­ »ç¿ëÀÚ Á¤º¸(ID, ±ÇÇÑ µî)¸¦ ²¨³» Authentication °´Ã¼¸¦ ¸¸µé°í,
-                //SecurityContextHolder¿¡ ÀúÀåÇØ¼­ Spring Security°¡ ÀÌÈÄÀÇ ·ÎÁ÷(Controller µî)¿¡¼­ "ÀÌ »ç¿ëÀÚ´Â ·Î±×ÀÎÇß´Ù"¶ó°í ÀÎ½Ä
+                //ì¦‰, ì—¬ê¸°ì„œëŠ” í† í°ì—ì„œ ì‚¬ìš©ì ì •ë³´(ID, ê¶Œí•œ ë“±)ë¥¼ êº¼ë‚´ Authentication ê°ì²´ë¥¼ ë§Œë“¤ê³ ,
+                //SecurityContextHolderì— ì €ì¥í•´ì„œ Spring Securityê°€ ì´í›„ì˜ ë¡œì§(Controller ë“±)ì—ì„œ "ì´ ì‚¬ìš©ìëŠ” ë¡œê·¸ì¸í–ˆë‹¤"ë¼ê³  ì¸ì‹
 
-                log.debug("Security Context¿¡ ÀÎÁõ Á¤º¸ ÀúÀå: {}", authentication.getName());
+                log.debug("Security Contextì— ì¸ì¦ ì •ë³´ ì €ì¥: {}", authentication.getName());
             }
         }
 
         filterChain.doFilter(request, response);
-        //ÀÎÁõ ÀÛ¾÷ÀÌ ³¡³ª¸é ´ÙÀ½ ÇÊÅÍ·Î ¿äÃ»À» ³Ñ±è(ÀÌ·¸°Ô °è¼Ó ¿¬¼ÓÀûÀ¸·Î ÇÊÅÍ¸¦ °Å´Â °Ç "ÇÊÅÍ Ã¼ÀÎ"ÀÌ¶ó°í ÇÔ)
+        //ì¸ì¦ ì‘ì—…ì´ ëë‚˜ë©´ ë‹¤ìŒ í•„í„°ë¡œ ìš”ì²­ì„ ë„˜ê¹€(ì´ë ‡ê²Œ ê³„ì† ì—°ì†ì ìœ¼ë¡œ í•„í„°ë¥¼ ê±°ëŠ” ê±´ "í•„í„° ì²´ì¸"ì´ë¼ê³  í•¨)
     }
 
 
-//¿¹¿Ü Ã³¸® ·ÎÁ÷: shouldNotFilter
-//¿©±â¼­´Â ÀÌ ÇÊÅÍ¸¦ Àû¿ëÇÏÁö ¸»¾Æ¾ß ÇÒ °æ·Î¸¦ Á¤ÀÇ
+//ì˜ˆì™¸ ì²˜ë¦¬ ë¡œì§: shouldNotFilter
+//ì—¬ê¸°ì„œëŠ” ì´ í•„í„°ë¥¼ ì ìš©í•˜ì§€ ë§ì•„ì•¼ í•  ê²½ë¡œë¥¼ ì •ì˜
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
 
-        // ÀÎÁõÀÌ ÇÊ¿ä ¾ø´Â °æ·Î´Â ÇÊÅÍ ½ºÅµ
+        // ì¸ì¦ì´ í•„ìš” ì—†ëŠ” ê²½ë¡œëŠ” í•„í„° ìŠ¤í‚µ
         return path.startsWith("/api/v1/auth/login") ||
                 path.startsWith("/api/v1/auth/refresh") ||
                 path.startsWith("/swagger-ui") ||
@@ -84,13 +84,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 path.startsWith("/ws");
     }
     /*
-    /api/v1/auth/login: ·Î±×ÀÎ ¿äÃ» ½Ã¿¡´Â ¾ÆÁ÷ ÅäÅ«ÀÌ ¾øÀ¸¹Ç·Î °Ë»çÇÒ ÇÊ¿ä°¡ ¾øÀ½
+    /api/v1/auth/login: ë¡œê·¸ì¸ ìš”ì²­ ì‹œì—ëŠ” ì•„ì§ í† í°ì´ ì—†ìœ¼ë¯€ë¡œ ê²€ì‚¬í•  í•„ìš”ê°€ ì—†ìŒ
 
-    /api/v1/auth/refresh: ÅäÅ« Àç¹ß±Ş ¿äÃ»Àº ¸¸·áµÈ Access TokenÀÌ³ª Refresh TokenÀ» º¸³»¹Ç·Î,
-                          ÀÏ¹İÀûÀÎ Access Token °ËÁõ ·ÎÁ÷À» Å¸¸é ¾È µÊ
+    /api/v1/auth/refresh: í† í° ì¬ë°œê¸‰ ìš”ì²­ì€ ë§Œë£Œëœ Access Tokenì´ë‚˜ Refresh Tokenì„ ë³´ë‚´ë¯€ë¡œ,
+                          ì¼ë°˜ì ì¸ Access Token ê²€ì¦ ë¡œì§ì„ íƒ€ë©´ ì•ˆ ë¨
 
-    /swagger-ui, /v3/api-docs: API ¹®¼­ Á¢±ÙÀº ÀÎÁõ ¾øÀÌ °¡´ÉÇØ¾ß ÇÏ´Ï±î!
+    /swagger-ui, /v3/api-docs: API ë¬¸ì„œ ì ‘ê·¼ì€ ì¸ì¦ ì—†ì´ ê°€ëŠ¥í•´ì•¼ í•˜ë‹ˆê¹Œ!
 
-    /ws: À¥¼ÒÄÏ ¿¬°á ¿äÃ»¿¡ ´ëÇÑ ¿¹¿Ü Ã³¸®
+    /ws: ì›¹ì†Œì¼“ ì—°ê²° ìš”ì²­ì— ëŒ€í•œ ì˜ˆì™¸ ì²˜ë¦¬
      */
 }

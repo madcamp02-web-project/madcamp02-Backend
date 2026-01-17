@@ -13,36 +13,36 @@ import java.util.List;
 @Repository
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
 
-    // »ç¿ëÀÚÀÇ ÀüÃ¼ ¾Ë¸² (ÃÖ½Å¼ø)
+    // ì‚¬ìš©ìì˜ ì „ì²´ ì•Œë¦¼ (ìµœì‹ ìˆœ)
     List<Notification> findByUserUserIdOrderByCreatedAtDesc(Long userId);
 
-    // »ç¿ëÀÚÀÇ ¾Ë¸² (ÆäÀÌÂ¡)
+    // ì‚¬ìš©ìì˜ ì•Œë¦¼ (í˜ì´ì§•)
     Page<Notification> findByUserUserId(Long userId, Pageable pageable);
 
-    // ÀĞÁö ¾ÊÀº ¾Ë¸² ¸ñ·Ï
+    // ì½ì§€ ì•Šì€ ì•Œë¦¼ ëª©ë¡
     List<Notification> findByUserUserIdAndIsReadFalseOrderByCreatedAtDesc(Long userId);
 
-    // ÀĞÁö ¾ÊÀº ¾Ë¸² °³¼ö
+    // ì½ì§€ ì•Šì€ ì•Œë¦¼ ê°œìˆ˜
     long countByUserUserIdAndIsReadFalse(Long userId);
 
-    // ¾Ë¸² Å¸ÀÔº° Á¶È¸
+    // ì•Œë¦¼ íƒ€ì…ë³„ ì¡°íšŒ
     List<Notification> findByUserUserIdAndTypeOrderByCreatedAtDesc(
             Long userId,
             Notification.NotificationType type
     );
 
-    // ´ÜÀÏ ¾Ë¸² ÀĞÀ½ Ã³¸®
+    // ë‹¨ì¼ ì•Œë¦¼ ì½ìŒ ì²˜ë¦¬
     @Modifying
     @Query("UPDATE Notification n SET n.isRead = true WHERE n.notifId = :notifId")
     void markAsRead(@Param("notifId") Long notifId);
 
-    // ÀüÃ¼ ¾Ë¸² ÀĞÀ½ Ã³¸®
+    // ì „ì²´ ì•Œë¦¼ ì½ìŒ ì²˜ë¦¬
     @Modifying
     @Query("UPDATE Notification n SET n.isRead = true " +
             "WHERE n.user.userId = :userId AND n.isRead = false")
     void markAllAsRead(@Param("userId") Long userId);
 
-    // ¿À·¡µÈ ¾Ë¸² »èÁ¦ (30ÀÏ ÀÌ»ó)
+    // ì˜¤ë˜ëœ ì•Œë¦¼ ì‚­ì œ (30ì¼ ì´ìƒ)
     @Modifying
     @Query("DELETE FROM Notification n " +
             "WHERE n.createdAt < :cutoffDate")
@@ -50,6 +50,6 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
             @Param("cutoffDate") java.time.LocalDateTime cutoffDate
     );
 
-    // »ç¿ëÀÚÀÇ ÀüÃ¼ ¾Ë¸² »èÁ¦
+    // ì‚¬ìš©ìì˜ ì „ì²´ ì•Œë¦¼ ì‚­ì œ
     void deleteByUserUserId(Long userId);
 }

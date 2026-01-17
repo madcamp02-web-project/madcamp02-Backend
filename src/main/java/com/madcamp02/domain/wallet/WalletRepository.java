@@ -14,25 +14,25 @@ import java.util.Optional;
 @Repository
 public interface WalletRepository extends JpaRepository<Wallet, Long> {
 
-    // »ç¿ëÀÚ ID·Î Áö°© Á¶È¸
+    // ì‚¬ìš©ì IDë¡œ ì§€ê°‘ ì¡°íšŒ
     Optional<Wallet> findByUserUserId(Long userId);
 
-    // »ç¿ëÀÚ ID·Î Áö°© Á¶È¸ (ºñ°üÀû ¶ô - µ¿½Ã¼º Á¦¾î)
+    // ì‚¬ìš©ì IDë¡œ ì§€ê°‘ ì¡°íšŒ (ë¹„ê´€ì  ë½ - ë™ì‹œì„± ì œì–´)
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT w FROM Wallet w WHERE w.user.userId = :userId")
     Optional<Wallet> findByUserIdWithLock(@Param("userId") Long userId);
 
-    // ÃÑ ÀÚ»ê ±âÁØ »óÀ§ N¸í Á¶È¸ (·©Å·¿ë)
+    // ì´ ìì‚° ê¸°ì¤€ ìƒìœ„ Nëª… ì¡°íšŒ (ë­í‚¹ìš©)
     @Query("SELECT w FROM Wallet w ORDER BY w.totalAssets DESC")
     List<Wallet> findTopByOrderByTotalAssetsDesc();
 
-    // ½ÇÇö ¼öÀÍ ±âÁØ »óÀ§ N¸í Á¶È¸
+    // ì‹¤í˜„ ìˆ˜ìµ ê¸°ì¤€ ìƒìœ„ Nëª… ì¡°íšŒ
     @Query("SELECT w FROM Wallet w WHERE w.realizedProfit > 0 ORDER BY w.realizedProfit DESC")
     List<Wallet> findTopByRealizedProfit();
 
-    // Æ¯Á¤ ±İ¾× ÀÌ»ó º¸À¯ÀÚ Á¶È¸
+    // íŠ¹ì • ê¸ˆì•¡ ì´ìƒ ë³´ìœ ì ì¡°íšŒ
     List<Wallet> findByCashBalanceGreaterThanEqual(BigDecimal amount);
 
-    // °ÔÀÓ ÄÚÀÎ º¸À¯·® ±âÁØ Á¶È¸
+    // ê²Œì„ ì½”ì¸ ë³´ìœ ëŸ‰ ê¸°ì¤€ ì¡°íšŒ
     List<Wallet> findByGameCoinGreaterThanOrderByGameCoinDesc(Integer minCoin);
 }

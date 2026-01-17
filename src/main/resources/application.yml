@@ -72,8 +72,8 @@ spring:
 # ============================================
 jwt:
   secret: ${JWT_SECRET:your-256-bit-secret-key-here-change-in-production-minimum-32-characters}
-  access-token-expiration: 3600000      # 1시간 (ms)
-  refresh-token-expiration: 604800000   # 7일 (ms)
+  access-expiration: 3600000      # 1시간 (ms)
+  refresh-expiration: 604800000   # 7일 (ms)
 
 # ============================================
 # 서버 설정

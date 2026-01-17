@@ -15,28 +15,28 @@ import java.util.UUID;
 @Repository
 public interface ChatHistoryRepository extends JpaRepository<ChatHistory, Long> {
 
-    // »ç¿ëÀÚÀÇ ÀüÃ¼ Ã¤ÆÃ ±â·Ï (ÃÖ½Å¼ø)
+    // ì‚¬ìš©ìì˜ ì „ì²´ ì±„íŒ… ê¸°ë¡ (ìµœì‹ ìˆœ)
     List<ChatHistory> findByUserUserIdOrderByCreatedAtDesc(Long userId);
 
-    // »ç¿ëÀÚÀÇ Ã¤ÆÃ ±â·Ï (ÆäÀÌÂ¡)
+    // ì‚¬ìš©ìì˜ ì±„íŒ… ê¸°ë¡ (í˜ì´ì§•)
     Page<ChatHistory> findByUserUserId(Long userId, Pageable pageable);
 
-    // ¼¼¼Ç ID·Î Ã¤ÆÃ ±â·Ï Á¶È¸
+    // ì„¸ì…˜ IDë¡œ ì±„íŒ… ê¸°ë¡ ì¡°íšŒ
     Optional<ChatHistory> findBySessionId(UUID sessionId);
 
-    // »ç¿ëÀÚÀÇ Æ¯Á¤ ¼¼¼Ç Ã¤ÆÃ ±â·Ï
+    // ì‚¬ìš©ìì˜ íŠ¹ì • ì„¸ì…˜ ì±„íŒ… ê¸°ë¡
     Optional<ChatHistory> findByUserUserIdAndSessionId(Long userId, UUID sessionId);
 
-    // ¼¼¼Ç Á¸Àç ¿©ºÎ È®ÀÎ
+    // ì„¸ì…˜ ì¡´ì¬ ì—¬ë¶€ í™•ì¸
     boolean existsBySessionId(UUID sessionId);
 
-    // »ç¿ëÀÚÀÇ ¼¼¼Ç ¸ñ·Ï
+    // ì‚¬ìš©ìì˜ ì„¸ì…˜ ëª©ë¡
     @Query("SELECT DISTINCT c.sessionId FROM ChatHistory c " +
             "WHERE c.user.userId = :userId " +
             "ORDER BY c.createdAt DESC")
     List<UUID> findSessionIdsByUserId(@Param("userId") Long userId);
 
-    // Æ¯Á¤ ±â°£ Ã¤ÆÃ ±â·Ï
+    // íŠ¹ì • ê¸°ê°„ ì±„íŒ… ê¸°ë¡
     @Query("SELECT c FROM ChatHistory c " +
             "WHERE c.user.userId = :userId " +
             "AND c.createdAt BETWEEN :startDate AND :endDate")
@@ -46,9 +46,9 @@ public interface ChatHistoryRepository extends JpaRepository<ChatHistory, Long> 
             @Param("endDate") LocalDateTime endDate
     );
 
-    // ¼¼¼Ç »èÁ¦
+    // ì„¸ì…˜ ì‚­ì œ
     void deleteBySessionId(UUID sessionId);
 
-    // »ç¿ëÀÚÀÇ ÀüÃ¼ Ã¤ÆÃ ±â·Ï »èÁ¦
+    // ì‚¬ìš©ìì˜ ì „ì²´ ì±„íŒ… ê¸°ë¡ ì‚­ì œ
     void deleteByUserUserId(Long userId);
 }

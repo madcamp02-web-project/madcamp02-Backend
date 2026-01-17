@@ -36,8 +36,8 @@ spring:
 # ============================================
 jwt:
   secret: ${JWT_SECRET}
-  access-token-expiration: 3600000    # 1시간
-  refresh-token-expiration: 604800000 # 7일
+  access-expiration: 3600000    # 1시간
+  refresh-expiration: 604800000 # 7일
 
 # ============================================
 # 프로덕션 서버 설정

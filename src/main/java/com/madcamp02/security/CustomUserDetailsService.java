@@ -1,10 +1,10 @@
 package com.madcamp02.security;
 
-//Spring SecurityÀÇ ÀÎÁõ ¸Å´ÏÀú¿Í ½ÇÁ¦ µ¥ÀÌÅÍº£ÀÌ½º(Repository) »çÀÌ¸¦ ¿¬°áÇÏ´Â '´Ù¸®(Bridge)' ¿ªÇÒÀ» ÇÏ´Â ¼­ºñ½º=
-//½ÇÁ¦·Î DB¿¡ Á¢±ÙÇØ¼­ ÀÎÁõÈ®ÀÎÀ» ¼öÇàÇÏ´Â Å¬·¡½º¶ó°í »ı°¢ÇÏ¸é µÊ
+//Spring Securityì˜ ì¸ì¦ ë§¤ë‹ˆì €ì™€ ì‹¤ì œ ë°ì´í„°ë² ì´ìŠ¤(Repository) ì‚¬ì´ë¥¼ ì—°ê²°í•˜ëŠ” 'ë‹¤ë¦¬(Bridge)' ì—­í• ì„ í•˜ëŠ” ì„œë¹„ìŠ¤=
+//ì‹¤ì œë¡œ DBì— ì ‘ê·¼í•´ì„œ ì¸ì¦í™•ì¸ì„ ìˆ˜í–‰í•˜ëŠ” í´ë˜ìŠ¤ë¼ê³  ìƒê°í•˜ë©´ ë¨
 
-//Spring Security´Â DB¿¡ »ç¿ëÀÚ°¡ ÀÖ´ÂÁö, ±× »ç¿ëÀÚ°¡ ´©±¸ÀÎÁö Á÷Á¢ ¾Ë ¼ö ¾øÀ¸¹Ç·Î,
-//"ID¸¦ ÁÙ Å×´Ï »ç¿ëÀÚ Á¤º¸¸¦ Ã£¾Æ¿Í¶ó"¶ó°í ¸í·ÉÇÒ ¼ö ÀÖ´Â ±¸ÇöÃ¼°¡ ÇÊ¿äÇÑµ¥, ±×°Ô ¹Ù·Î ÀÌ Å¬·¡½º
+//Spring SecurityëŠ” DBì— ì‚¬ìš©ìê°€ ìˆëŠ”ì§€, ê·¸ ì‚¬ìš©ìê°€ ëˆ„êµ¬ì¸ì§€ ì§ì ‘ ì•Œ ìˆ˜ ì—†ìœ¼ë¯€ë¡œ,
+//"IDë¥¼ ì¤„ í…Œë‹ˆ ì‚¬ìš©ì ì •ë³´ë¥¼ ì°¾ì•„ì™€ë¼"ë¼ê³  ëª…ë ¹í•  ìˆ˜ ìˆëŠ” êµ¬í˜„ì²´ê°€ í•„ìš”í•œë°, ê·¸ê²Œ ë°”ë¡œ ì´ í´ë˜ìŠ¤
 
 
 import com.madcamp02.domain.user.User;
@@ -19,44 +19,44 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class CustomUserDetailsService implements UserDetailsService {
-    //implements UserDetailsService: Spring SecurityÀÇ Ç¥ÁØ ÀÎÅÍÆäÀÌ½º¸¦ ±¸ÇöÇÔ.
-    //ÀÌ ÀÎÅÍÆäÀÌ½º¸¦ ±¸ÇöÇØ¼­ BeanÀ¸·Î µî·ÏÇÏ¸é, Spring Security´Â ·Î±×ÀÎ ½Ãµµ³ª ÀÎÁõ °úÁ¤¿¡¼­ ÀÚµ¿À¸·Î ÀÌ ¼­ºñ½º¸¦ Ã£¾Æ »ç¿ë
+    //implements UserDetailsService: Spring Securityì˜ í‘œì¤€ ì¸í„°í˜ì´ìŠ¤ë¥¼ êµ¬í˜„í•¨.
+    //ì´ ì¸í„°í˜ì´ìŠ¤ë¥¼ êµ¬í˜„í•´ì„œ Beanìœ¼ë¡œ ë“±ë¡í•˜ë©´, Spring SecurityëŠ” ë¡œê·¸ì¸ ì‹œë„ë‚˜ ì¸ì¦ ê³¼ì •ì—ì„œ ìë™ìœ¼ë¡œ ì´ ì„œë¹„ìŠ¤ë¥¼ ì°¾ì•„ ì‚¬ìš©
 
-    //¼Ò¿ş°ø ½Ã°£¿¡µµ ¹è¿î°ÅÁö¸¸ ÀÎÅÍÆäÀÌ½º´Â Àı´ë·Î º¯°æÇÏÁö ¾Ê´Â´Ù.
-    //±×¸®°í class³¢¸° ¹«Á¶°Ç interface·Î¸¸ ¼ÒÅëÇÑ´Ù(implements¸¦ ÅëÇØ)
+    //ì†Œì›¨ê³µ ì‹œê°„ì—ë„ ë°°ìš´ê±°ì§€ë§Œ ì¸í„°í˜ì´ìŠ¤ëŠ” ì ˆëŒ€ë¡œ ë³€ê²½í•˜ì§€ ì•ŠëŠ”ë‹¤.
+    //ê·¸ë¦¬ê³  classë¼ë¦° ë¬´ì¡°ê±´ interfaceë¡œë§Œ ì†Œí†µí•œë‹¤(implementsë¥¼ í†µí•´)
 
     private final UserRepository userRepository;
-    //UserRepository ÁÖÀÔ: ½ÇÁ¦ DB Á¶È¸¸¦ À§ÇØ ¸®Æ÷ÁöÅä¸®¸¦ ÁÖÀÔ¹ŞÀ½
+    //UserRepository ì£¼ì…: ì‹¤ì œ DB ì¡°íšŒë¥¼ ìœ„í•´ ë¦¬í¬ì§€í† ë¦¬ë¥¼ ì£¼ì…ë°›ìŒ
 
 
     @Override
-    @Transactional(readOnly = true) //¼º´É ÃÖÀûÈ­: @Transactional(readOnly = true)
-    //Á¶È¸(SELECT)¸¸ ¼öÇàÇÏ±â ¶§¹®¿¡ readOnly = true ¿É¼ÇÀ» ÁÖ¸é,
-    //JPA(Hibernate)°¡ ¿µ¼Ó¼º ÄÁÅØ½ºÆ®ÀÇ ´õÆ¼ Ã¼Å·(º¯°æ °¨Áö) ±â´ÉÀ» ²ô°í,
-    //½º³À¼¦À» ¸¸µéÁö ¾Ê¾Æ ¸Ş¸ğ¸®¿Í CPU ¼º´ÉÀÌ ÃÖÀûÈ­
+    @Transactional(readOnly = true) //ì„±ëŠ¥ ìµœì í™”: @Transactional(readOnly = true)
+    //ì¡°íšŒ(SELECT)ë§Œ ìˆ˜í–‰í•˜ê¸° ë•Œë¬¸ì— readOnly = true ì˜µì…˜ì„ ì£¼ë©´,
+    //JPA(Hibernate)ê°€ ì˜ì†ì„± ì»¨í…ìŠ¤íŠ¸ì˜ ë”í‹° ì²´í‚¹(ë³€ê²½ ê°ì§€) ê¸°ëŠ¥ì„ ë„ê³ ,
+    //ìŠ¤ëƒ…ìƒ·ì„ ë§Œë“¤ì§€ ì•Šì•„ ë©”ëª¨ë¦¬ì™€ CPU ì„±ëŠ¥ì´ ìµœì í™”
     public UserDetails loadUserByUsername(String userId) throws UsernameNotFoundException {
-        User user = userRepository.findById(Long.parseLong(userId)) //µé¾î¿Â String °ªÀ» LongÀ¸·Î º¯È¯.
-                // ÀÌ´Â ¾Õ¼­ ºĞ¼®Çß´ø CustomUserDetails.getUsername()ÀÌ User ID(PK)¸¦ ¹İÈ¯ÇÏµµ·Ï ¼³°èµÈ °Í°ú Â¦À» ÀÌ·ë
+        User user = userRepository.findById(Long.parseLong(userId)) //ë“¤ì–´ì˜¨ String ê°’ì„ Longìœ¼ë¡œ ë³€í™˜.
+                // ì´ëŠ” ì•ì„œ ë¶„ì„í–ˆë˜ CustomUserDetails.getUsername()ì´ User ID(PK)ë¥¼ ë°˜í™˜í•˜ë„ë¡ ì„¤ê³„ëœ ê²ƒê³¼ ì§ì„ ì´ë£¸
                 .orElseThrow(() -> new UsernameNotFoundException(
-                        "»ç¿ëÀÚ¸¦ Ã£À» ¼ö ¾ø½À´Ï´Ù. ID: " + userId
+                        "ì‚¬ìš©ìë¥¼ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤. ID: " + userId
                 ));
 
         return new CustomUserDetails(user);
-        //DB¿¡¼­ Ã£Àº User Entity(Table)¸¦ ±×´ë·Î ¹İÈ¯ÇÏÁö ¾Ê°í, ¾Õ¼­ ºĞ¼®ÇÑ CustomUserDetails·Î °¨½Î¼­ ¹İÈ¯
+        //DBì—ì„œ ì°¾ì€ User Entity(Table)ë¥¼ ê·¸ëŒ€ë¡œ ë°˜í™˜í•˜ì§€ ì•Šê³ , ì•ì„œ ë¶„ì„í•œ CustomUserDetailsë¡œ ê°ì‹¸ì„œ ë°˜í™˜
     }
-    //¸Ş¼­µå ÀÌ¸§Àº Ç¥ÁØ ÀÎÅÍÆäÀÌ½º ¶§¹®¿¡ loadUserByUsernameÀÌÁö¸¸, ½ÇÁ¦ ³»ºÎ ·ÎÁ÷Àº userId(PK)¸¦ ¹Ş°í ÀÖÀ½
+    //ë©”ì„œë“œ ì´ë¦„ì€ í‘œì¤€ ì¸í„°í˜ì´ìŠ¤ ë•Œë¬¸ì— loadUserByUsernameì´ì§€ë§Œ, ì‹¤ì œ ë‚´ë¶€ ë¡œì§ì€ userId(PK)ë¥¼ ë°›ê³  ìˆìŒ
 
-    @Transactional(readOnly = true) //¼º´É ÃÖÀûÈ­: @Transactional(readOnly = true)
-    //Á¶È¸(SELECT)¸¸ ¼öÇàÇÏ±â ¶§¹®¿¡ readOnly = true ¿É¼ÇÀ» ÁÖ¸é,
-    //JPA(Hibernate)°¡ ¿µ¼Ó¼º ÄÁÅØ½ºÆ®ÀÇ ´õÆ¼ Ã¼Å·(º¯°æ °¨Áö) ±â´ÉÀ» ²ô°í,
-    //½º³À¼¦À» ¸¸µéÁö ¾Ê¾Æ ¸Ş¸ğ¸®¿Í CPU ¼º´ÉÀÌ ÃÖÀûÈ­
+    @Transactional(readOnly = true) //ì„±ëŠ¥ ìµœì í™”: @Transactional(readOnly = true)
+    //ì¡°íšŒ(SELECT)ë§Œ ìˆ˜í–‰í•˜ê¸° ë•Œë¬¸ì— readOnly = true ì˜µì…˜ì„ ì£¼ë©´,
+    //JPA(Hibernate)ê°€ ì˜ì†ì„± ì»¨í…ìŠ¤íŠ¸ì˜ ë”í‹° ì²´í‚¹(ë³€ê²½ ê°ì§€) ê¸°ëŠ¥ì„ ë„ê³ ,
+    //ìŠ¤ëƒ…ìƒ·ì„ ë§Œë“¤ì§€ ì•Šì•„ ë©”ëª¨ë¦¬ì™€ CPU ì„±ëŠ¥ì´ ìµœì í™”
     public UserDetails loadUserByEmail(String email) throws UsernameNotFoundException {
-        //ÀÌ°Ç ¿ì¸®°¡ Á÷Á¢ ¸¸µç ÄÚµå(Ä¿½ºÅÒ ¸Ş¼­µå (loadUserByEmail))
-        //OAuth2 ·Î±×ÀÎ ÃÊ±â ´Ü°è¿¡ Ä«Ä«¿À/±¸±Û¿¡¼­ ÀÌ¸ŞÀÏ Á¤º¸¸¦ ¹Ş¾Æ¿ÔÀ» ¶§,
-        //ÀÌ¹Ì °¡ÀÔµÈ È¸¿øÀÎÁö È®ÀÎÇÏ°Å³ª JWT ÅäÅ«À» Ã³À½ ¹ß±ŞÇÏ±â À§ÇØ »ç¿ëÀÚ¸¦ ½Äº°ÇÒ ¶§ ¾²ÀÓ
+        //ì´ê±´ ìš°ë¦¬ê°€ ì§ì ‘ ë§Œë“  ì½”ë“œ(ì»¤ìŠ¤í…€ ë©”ì„œë“œ (loadUserByEmail))
+        //OAuth2 ë¡œê·¸ì¸ ì´ˆê¸° ë‹¨ê³„ì— ì¹´ì¹´ì˜¤/êµ¬ê¸€ì—ì„œ ì´ë©”ì¼ ì •ë³´ë¥¼ ë°›ì•„ì™”ì„ ë•Œ,
+        //ì´ë¯¸ ê°€ì…ëœ íšŒì›ì¸ì§€ í™•ì¸í•˜ê±°ë‚˜ JWT í† í°ì„ ì²˜ìŒ ë°œê¸‰í•˜ê¸° ìœ„í•´ ì‚¬ìš©ìë¥¼ ì‹ë³„í•  ë•Œ ì“°ì„
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException(
-                        "»ç¿ëÀÚ¸¦ Ã£À» ¼ö ¾ø½À´Ï´Ù. Email: " + email
+                        "ì‚¬ìš©ìë¥¼ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤. Email: " + email
                 ));
 
         return new CustomUserDetails(user);

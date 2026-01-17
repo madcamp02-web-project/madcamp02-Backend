@@ -9,25 +9,25 @@ import java.util.List;
 @Repository
 public interface ItemRepository extends JpaRepository<Item, Long> {
 
-    // Ä«Å×°í¸®º° ¾ÆÀÌÅÛ Á¶È¸
+    // ì¹´í…Œê³ ë¦¬ë³„ ì•„ì´í…œ ì¡°íšŒ
     List<Item> findByCategory(Item.Category category);
 
-    // µî±Şº° ¾ÆÀÌÅÛ Á¶È¸
+    // ë“±ê¸‰ë³„ ì•„ì´í…œ ì¡°íšŒ
     List<Item> findByRarity(Item.Rarity rarity);
 
-    // Ä«Å×°í¸®¿Í µî±ŞÀ¸·Î Á¶È¸
+    // ì¹´í…Œê³ ë¦¬ì™€ ë“±ê¸‰ìœ¼ë¡œ ì¡°íšŒ
     List<Item> findByCategoryAndRarity(Item.Category category, Item.Rarity rarity);
 
-    // È®·ü ±âÁØ Á¤·Ä (°¡Ã­¿ë)
+    // í™•ë¥  ê¸°ì¤€ ì •ë ¬ (ê°€ì± ìš©)
     List<Item> findAllByOrderByProbabilityDesc();
 
-    // µî±Şº° ¾ÆÀÌÅÛ (È®·ü¼ø Á¤·Ä)
+    // ë“±ê¸‰ë³„ ì•„ì´í…œ (í™•ë¥ ìˆœ ì •ë ¬)
     List<Item> findByRarityOrderByProbabilityDesc(Item.Rarity rarity);
 
-    // ¾ÆÀÌÅÛ ÀÌ¸§À¸·Î °Ë»ö
+    // ì•„ì´í…œ ì´ë¦„ìœ¼ë¡œ ê²€ìƒ‰
     List<Item> findByNameContaining(String keyword);
 
-    // ÀüÃ¼ ¾ÆÀÌÅÛ (µî±Ş¼ø Á¤·Ä)
+    // ì „ì²´ ì•„ì´í…œ (ë“±ê¸‰ìˆœ ì •ë ¬)
     @Query("SELECT i FROM Item i ORDER BY " +
             "CASE i.rarity " +
             "WHEN 'LEGENDARY' THEN 1 " +

@@ -44,7 +44,7 @@ public class Item {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    // ========== °ü°è ==========
+    // ========== ê´€ê³„ ==========
 
     @OneToMany(mappedBy = "item", cascade = CascadeType.ALL)
     private List<Inventory> inventories = new ArrayList<>();
@@ -59,7 +59,7 @@ public class Item {
         COMMON, RARE, EPIC, LEGENDARY
     }
 
-    // ========== »ı¼ºÀÚ ==========
+    // ========== ìƒì„±ì ==========
 
     @Builder
     public Item(String name, String description, Category category,

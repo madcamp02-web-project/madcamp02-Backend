@@ -9,26 +9,26 @@ import java.util.Optional;
 @Repository
 public interface WatchlistRepository extends JpaRepository<Watchlist, Long> {
 
-    // »ç¿ëÀÚÀÇ °ü½ÉÁ¾¸ñ ¸ñ·Ï (ÃÖ½Å¼ø)
+    // ì‚¬ìš©ìì˜ ê´€ì‹¬ì¢…ëª© ëª©ë¡ (ìµœì‹ ìˆœ)
     List<Watchlist> findByUserUserIdOrderByAddedAtDesc(Long userId);
 
-    // Æ¯Á¤ Á¾¸ñÀÌ °ü½ÉÁ¾¸ñ¿¡ ÀÖ´ÂÁö È®ÀÎ
+    // íŠ¹ì • ì¢…ëª©ì´ ê´€ì‹¬ì¢…ëª©ì— ìˆëŠ”ì§€ í™•ì¸
     Optional<Watchlist> findByUserUserIdAndTicker(Long userId, String ticker);
 
-    // °ü½ÉÁ¾¸ñ Á¸Àç ¿©ºÎ
+    // ê´€ì‹¬ì¢…ëª© ì¡´ì¬ ì—¬ë¶€
     boolean existsByUserUserIdAndTicker(Long userId, String ticker);
 
-    // °ü½ÉÁ¾¸ñ »èÁ¦
+    // ê´€ì‹¬ì¢…ëª© ì‚­ì œ
     void deleteByUserUserIdAndTicker(Long userId, String ticker);
 
-    // »ç¿ëÀÚÀÇ °ü½ÉÁ¾¸ñ °³¼ö
+    // ì‚¬ìš©ìì˜ ê´€ì‹¬ì¢…ëª© ê°œìˆ˜
     long countByUserUserId(Long userId);
 
-    // Æ¯Á¤ Á¾¸ñÀ» °ü½ÉÁ¾¸ñ¿¡ µî·ÏÇÑ »ç¿ëÀÚ ¼ö
+    // íŠ¹ì • ì¢…ëª©ì„ ê´€ì‹¬ì¢…ëª©ì— ë“±ë¡í•œ ì‚¬ìš©ì ìˆ˜
     long countByTicker(String ticker);
 
-    // ÀÎ±â °ü½ÉÁ¾¸ñ (¸¹Àº »ç¿ëÀÚ°¡ µî·ÏÇÑ ¼ø)
-    // Native Query »ç¿ë
+    // ì¸ê¸° ê´€ì‹¬ì¢…ëª© (ë§ì€ ì‚¬ìš©ìê°€ ë“±ë¡í•œ ìˆœ)
+    // Native Query ì‚¬ìš©
     @org.springframework.data.jpa.repository.Query(
             value = "SELECT ticker, COUNT(*) as cnt FROM watchlist " +
                     "GROUP BY ticker ORDER BY cnt DESC LIMIT :limit",
