@@ -53,6 +53,7 @@ Spring이 "내가 미리 만들어 놓을 테니 필요할 때 가져다 써!"�
 
 import com.madcamp02.security.JwtAuthenticationFilter;
 import com.madcamp02.security.JwtTokenProvider;
+import com.madcamp02.security.OAuth2SuccessHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -118,25 +119,40 @@ DI를 사용할 때 (배급제):
 
 public class SecurityConfig {
     private final JwtTokenProvider jwtTokenProvider;
+    private final OAuth2SuccessHandler oAuth2SuccessHandler;
 
     // 공개 엔드포인트 (인증 불필요) //일종의 예외라고 생각하면 됨, 출입 명부 면제 리스트이다.
     private static final String[] PUBLIC_ENDPOINTS = {
-            "/api/v1/auth/login",
-            "/api/v1/auth/refresh",
-            "/api/v1/auth/google",
+            // ========== 인증 API ==========
+            "/api/v1/auth/signup",       // 일반 회원가입 (이메일/비밀번호)
+            "/api/v1/auth/login",        // 일반 로그인 (이메일/비밀번호)
+            "/api/v1/auth/oauth/google", // Google OAuth2 로그인
+            "/api/v1/auth/oauth/kakao",  // Kakao OAuth2 로그인
+            "/api/v1/auth/refresh",      // 토큰 갱신
+
+            // ========== OAuth2 관련 ==========
             "/oauth2/**",
             "/login/oauth2/**",
+
+            // ========== API 문서 (Swagger) ==========
             "/swagger-ui/**",
             "/swagger-ui.html",
             "/v3/api-docs/**",
+
+            // ========== 서버 상태 ==========
             "/actuator/health",
-            "/ws/**"  // WebSocket
+
+            // ========== WebSocket ==========
+            "/ws/**"
     };
     /*
-        로그인/회원가입 API (/auth/**)
+        인증 관련 API:
+          - 회원가입, 로그인, OAuth(Google/Kakao), 토큰갱신은 인증 없이 접근 가능
+        
         소셜 로그인 (/oauth2/**)
         API 문서 (/swagger-ui/**)
         서버 상태 체크 (/actuator/health)
+        WebSocket 연결 (/ws/**)
      */
 
 
@@ -179,6 +195,20 @@ public class SecurityConfig {
                 //스프링 시큐리티의 기본 로그인 필터(UsernamePassword...)가 동작하기 전에 우리가 만든 JwtAuthenticationFilter를 먼저 실행
                 //JWT 필터를 사용하는 이유는 ID/PW 검사하기 전에, 가져온 토큰이 유효한지 먼저 검사해서 유효하면 통과시켜주기 위함
                 //토큰 유효하면 빠르게 ok
+
+                // OAuth2 로그인 설정 (백엔드 주도 방식)
+                // 사용자가 /oauth2/authorization/kakao 또는 /oauth2/authorization/google 접근 시
+                // 해당 OAuth2 제공자의 로그인 페이지로 리다이렉트
+                // 로그인 성공 시 OAuth2SuccessHandler가 JWT 발급 후 프론트엔드로 리다이렉트
+                .oauth2Login(oauth2 -> oauth2
+                        .successHandler(oAuth2SuccessHandler)  // 로그인 성공 시 JWT 발급 핸들러
+                        .failureHandler((request, response, exception) -> {
+                            // 로그인 실패 시 에러 응답
+                            response.setStatus(401);
+                            response.setContentType("application/json;charset=UTF-8");
+                            response.getWriter().write("{\"error\": \"OAuth2 Login Failed\", \"message\": \"" + exception.getMessage() + "\"}");
+                        })
+                )
 
                 // 예외 처리
                 .exceptionHandling(exception -> exception

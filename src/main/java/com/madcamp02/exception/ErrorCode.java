@@ -9,7 +9,7 @@ import org.springframework.http.HttpStatus;
  * 모든 비즈니스 예외에서 사용하는 에러 코드 enum
  * 
  * 명세서 기준 에러 코드:
- * - AUTH_001~005: 인증 관련
+ * - AUTH_001~008: 인증 관련 (001~005 기본, 006 카카오, 007 비밀번호, 008 이메일중복)
  * - TRADE_001~004: 거래 관련
  * - GAME_001~003: 게임 관련
  * - USER_001~002: 사용자 관련
@@ -30,6 +30,12 @@ public enum ErrorCode {
     AUTH_USER_NOT_FOUND(HttpStatus.NOT_FOUND, "AUTH_004", "사용자를 찾을 수 없습니다."),
     // AUTH_005: Google 토큰 검증 실패 (추가)
     AUTH_GOOGLE_TOKEN_INVALID(HttpStatus.UNAUTHORIZED, "AUTH_005", "Google 토큰 검증에 실패했습니다."),
+    // AUTH_006: Kakao 토큰 검증 실패 (카카오 OAuth 추가)
+    AUTH_KAKAO_TOKEN_INVALID(HttpStatus.UNAUTHORIZED, "AUTH_006", "Kakao 토큰 검증에 실패했습니다."),
+    // AUTH_007: 비밀번호 불일치 (일반 로그인 추가)
+    AUTH_PASSWORD_MISMATCH(HttpStatus.UNAUTHORIZED, "AUTH_007", "비밀번호가 일치하지 않습니다."),
+    // AUTH_008: 이메일 중복 (회원가입 시 이미 존재하는 이메일)
+    AUTH_EMAIL_DUPLICATION(HttpStatus.CONFLICT, "AUTH_008", "이미 가입된 이메일입니다."),
 
     // ========== 거래 관련 (TRADE) ==========
     // TRADE_001: 잔고 부족

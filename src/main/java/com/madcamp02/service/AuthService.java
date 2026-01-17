@@ -9,20 +9,27 @@ package com.madcamp02.service;
 //
 // 담당 기능:
 //   1. Google OAuth2 로그인 (ID Token 검증 → 회원가입/로그인 → JWT 발급)
-//   2. 토큰 갱신 (Refresh Token 검증 → 새 토큰 발급)
-//   3. 로그아웃 (Redis에서 Refresh Token 삭제)
+//   2. Kakao OAuth2 로그인 (Access Token 검증 → 회원가입/로그인 → JWT 발급)
+//   3. 일반 회원가입 (이메일/비밀번호 → 비밀번호 암호화 후 저장 → JWT 발급)
+//   4. 일반 로그인 (이메일/비밀번호 → 비밀번호 검증 → JWT 발급)
+//   5. 토큰 갱신 (Refresh Token 검증 → 새 토큰 발급)
+//   6. 로그아웃 (Redis에서 Refresh Token 삭제)
 //
 // 의존 관계:
 //   - UserRepository: 사용자 조회/저장
 //   - WalletRepository: 신규 사용자 지갑 생성
 //   - JwtTokenProvider: JWT 생성/검증
 //   - RedisTemplate: Refresh Token 저장/조회/삭제
+//   - PasswordEncoder: 비밀번호 암호화/검증 (BCrypt)
+//   - RestTemplate: 외부 API 호출 (Kakao 사용자 정보 조회)
 //
 // 트랜잭션:
 //   - login(): 사용자 생성과 지갑 생성이 함께 처리 (원자성 보장)
 //   - refresh(): 읽기 전용 트랜잭션
 //======================================
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.http.javanet.NetHttpTransport;
@@ -31,16 +38,22 @@ import com.madcamp02.domain.user.User;
 import com.madcamp02.domain.user.UserRepository;
 import com.madcamp02.domain.wallet.Wallet;
 import com.madcamp02.domain.wallet.WalletRepository;
+import com.madcamp02.dto.request.EmailLoginRequest;
 import com.madcamp02.dto.request.LoginRequest;
+import com.madcamp02.dto.request.SignupRequest;
 import com.madcamp02.dto.response.AuthResponse;
 import com.madcamp02.exception.AuthException;
+import com.madcamp02.exception.ErrorCode;
 import com.madcamp02.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.http.*;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
 import java.util.Collections;
@@ -93,6 +106,8 @@ public class AuthService {
     private final WalletRepository walletRepository;  // 회원가입 시 지갑을 만들어주기 위해 사용
     private final JwtTokenProvider jwtTokenProvider;  // JWT 토큰을 만들고, 검증하고, 해석하는 도구
     private final RedisTemplate<String, String> redisTemplate; // Refresh Token을 저장할 메모리 DB(Redis) 도구
+    private final PasswordEncoder passwordEncoder;   // 비밀번호를 안전하게 암호화(BCrypt)하고, 검증하는 도구
+    private final RestTemplate restTemplate;         // 외부 API(Kakao 등)에 HTTP 요청을 보내는 도구
 
     //==========================================
     // 설정값 주입 (application.yml에서 가져옴)
@@ -105,6 +120,10 @@ public class AuthService {
     // Refresh Token 만료 시간 (밀리초)
     @Value("${jwt.refresh-expiration}")
     private long refreshTokenExpiration;
+
+    // Kakao 사용자 정보 조회 API URL
+    // Access Token을 헤더에 담아 GET 요청하면 사용자 정보(이메일, 닉네임 등)를 JSON으로 반환
+    private static final String KAKAO_USER_INFO_URL = "https://kapi.kakao.com/v2/user/me";
 
     //==========================================
     // 로그인 처리
@@ -305,6 +324,219 @@ public class AuthService {
     }
 
     //==========================================
+    // 일반 회원가입 처리
+    //==========================================
+    /**
+     * 이메일/비밀번호 회원가입
+     * 
+     * 처리 과정:
+     *   1. 이메일 중복 확인 (이미 가입된 이메일인지)
+     *   2. 비밀번호 암호화 (BCrypt)
+     *   3. User 엔티티 생성 및 저장
+     *   4. Wallet 생성 (초기 자금 $10,000)
+     *   5. JWT Access Token + Refresh Token 발급
+     *   6. Refresh Token을 Redis에 저장
+     *   7. 응답 DTO 반환
+     * 
+     * @param request 회원가입 요청 (email, password, nickname)
+     * @return 인증 응답 (토큰 + 사용자 정보)
+     * @throws AuthException 이메일 중복 시 AUTH_008
+     */
+    @Transactional
+    public AuthResponse signup(SignupRequest request) {
+        // [1단계: 이메일 중복 확인]
+        // 이미 같은 이메일로 가입된 사용자가 있는지 확인
+        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
+            throw new AuthException(ErrorCode.AUTH_EMAIL_DUPLICATION);
+        }
+
+        // [2단계: 비밀번호 암호화]
+        // BCrypt 알고리즘으로 암호화 (복호화 불가능, 단방향 해시)
+        // 예: "password123" → "$2a$10$N9qo8uLOickgx2ZMRZoMy..."
+        String encodedPassword = passwordEncoder.encode(request.getPassword());
+
+        // [3단계: User 엔티티 생성]
+        // provider는 "LOCAL" (일반 가입), password는 암호화된 값
+        User user = User.builder()
+                .email(request.getEmail())
+                .password(encodedPassword)  // 암호화된 비밀번호 저장
+                .nickname(request.getNickname())
+                .provider("LOCAL")  // 일반 회원가입
+                .build();
+        user = userRepository.save(user);
+
+        // [4단계: 지갑 생성 (초기 자금 $10,000)]
+        Wallet wallet = Wallet.builder()
+                .user(user)
+                .build();
+        walletRepository.save(wallet);
+
+        // [5단계: JWT 토큰 발급]
+        String accessToken = jwtTokenProvider.createAccessToken(
+                user.getUserId(),
+                user.getEmail(),
+                user.getNickname()
+        );
+        String refreshToken = jwtTokenProvider.createRefreshToken(user.getUserId());
+
+        // [6단계: Redis에 Refresh Token 저장]
+        saveRefreshToken(user.getUserId(), refreshToken);
+
+        // [7단계: 응답 반환]
+        return AuthResponse.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .expiresIn(3600)  // 1시간 (초 단위)
+                .userId(user.getUserId())
+                .email(user.getEmail())
+                .nickname(user.getNickname())
+                .isNewUser(true)  // 신규 사용자
+                .build();
+    }
+
+    //==========================================
+    // 일반 로그인 처리 (이메일/비밀번호)
+    //==========================================
+    /**
+     * 이메일/비밀번호 로그인
+     * 
+     * 처리 과정:
+     *   1. 이메일로 사용자 조회
+     *   2. 비밀번호 검증 (BCrypt matches)
+     *   3. JWT Access Token + Refresh Token 발급
+     *   4. Refresh Token을 Redis에 저장
+     *   5. 응답 DTO 반환
+     * 
+     * @param request 로그인 요청 (email, password)
+     * @return 인증 응답 (토큰 + 사용자 정보)
+     * @throws AuthException 사용자 없음(AUTH_004) 또는 비밀번호 불일치(AUTH_007)
+     */
+    @Transactional(readOnly = true)
+    public AuthResponse emailLogin(EmailLoginRequest request) {
+        // [1단계: 사용자 조회]
+        // 이메일로 사용자를 찾음, 없으면 AUTH_004 에러
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new AuthException(ErrorCode.AUTH_USER_NOT_FOUND));
+
+        // [2단계: 비밀번호 검증]
+        // BCrypt의 matches() 메서드로 평문 비밀번호와 암호화된 비밀번호 비교
+        // 주의: OAuth 사용자는 password가 null일 수 있음
+        if (user.getPassword() == null || !passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new AuthException(ErrorCode.AUTH_PASSWORD_MISMATCH);
+        }
+
+        // [3단계: JWT 토큰 발급]
+        String accessToken = jwtTokenProvider.createAccessToken(
+                user.getUserId(),
+                user.getEmail(),
+                user.getNickname()
+        );
+        String refreshToken = jwtTokenProvider.createRefreshToken(user.getUserId());
+
+        // [4단계: Redis에 Refresh Token 저장]
+        saveRefreshToken(user.getUserId(), refreshToken);
+
+        // [5단계: 응답 반환]
+        return AuthResponse.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .expiresIn(3600)
+                .userId(user.getUserId())
+                .email(user.getEmail())
+                .nickname(user.getNickname())
+                .sajuElement(user.getSajuElement())
+                .avatarUrl(user.getAvatarUrl())
+                .isNewUser(false)
+                .build();
+    }
+
+    //==========================================
+    // Kakao OAuth2 로그인 처리
+    //==========================================
+    /**
+     * Kakao OAuth2 로그인
+     * 
+     * 처리 과정:
+     *   1. Kakao Access Token으로 사용자 정보 API 호출
+     *   2. 응답에서 이메일, 닉네임 추출
+     *   3. 이메일로 기존 사용자 조회
+     *   4. 신규 사용자면 자동 회원가입 + 지갑 생성
+     *   5. JWT Access Token + Refresh Token 발급
+     *   6. Refresh Token을 Redis에 저장
+     *   7. 응답 DTO 반환
+     * 
+     * Google OAuth와의 차이:
+     *   - Google: ID Token (JWT)을 직접 검증
+     *   - Kakao: Access Token으로 Kakao API 호출하여 사용자 정보 획득
+     * 
+     * @param accessToken Kakao에서 발급받은 Access Token
+     * @return 인증 응답 (토큰 + 사용자 정보)
+     * @throws AuthException Kakao 토큰 검증 실패 시 AUTH_006
+     */
+    @Transactional
+    public AuthResponse kakaoLogin(String accessToken) {
+        // [1단계: Kakao 사용자 정보 조회]
+        // Kakao API에 Access Token을 보내서 사용자 정보를 받아옴
+        JsonNode kakaoUserInfo = getKakaoUserInfo(accessToken);
+
+        // [2단계: 사용자 정보 추출]
+        // Kakao 응답 JSON에서 이메일과 닉네임 추출
+        // 응답 구조: { "kakao_account": { "email": "...", "profile": { "nickname": "..." } } }
+        String email = kakaoUserInfo.path("kakao_account").path("email").asText(null);
+        String nickname = kakaoUserInfo.path("kakao_account").path("profile").path("nickname").asText(null);
+
+        // 이메일이 없으면 에러 (Kakao 앱에서 이메일 동의 필수)
+        if (email == null || email.isEmpty()) {
+            log.error("Kakao 계정에 이메일 정보 없음");
+            throw new AuthException(ErrorCode.AUTH_KAKAO_TOKEN_INVALID);
+        }
+
+        // [3단계: 기존 사용자 조회]
+        User user = userRepository.findByEmail(email).orElse(null);
+        boolean isNewUser = (user == null);
+
+        // [4단계: 신규 회원가입 처리]
+        if (isNewUser) {
+            user = User.builder()
+                    .email(email)
+                    .nickname(nickname != null ? nickname : email.split("@")[0])
+                    .provider("KAKAO")  // Kakao로 가입
+                    .build();
+            user = userRepository.save(user);
+
+            // 지갑 생성 (초기 자금 $10,000)
+            Wallet wallet = Wallet.builder()
+                    .user(user)
+                    .build();
+            walletRepository.save(wallet);
+        }
+
+        // [5단계: JWT 토큰 발급]
+        String jwtAccessToken = jwtTokenProvider.createAccessToken(
+                user.getUserId(),
+                user.getEmail(),
+                user.getNickname()
+        );
+        String refreshToken = jwtTokenProvider.createRefreshToken(user.getUserId());
+
+        // [6단계: Redis에 Refresh Token 저장]
+        saveRefreshToken(user.getUserId(), refreshToken);
+
+        // [7단계: 응답 반환]
+        return AuthResponse.builder()
+                .accessToken(jwtAccessToken)
+                .refreshToken(refreshToken)
+                .expiresIn(3600)
+                .userId(user.getUserId())
+                .email(user.getEmail())
+                .nickname(user.getNickname())
+                .sajuElement(user.getSajuElement())
+                .avatarUrl(user.getAvatarUrl())
+                .isNewUser(isNewUser)
+                .build();
+    }
+
+    //==========================================
     // Private Helper Methods
     //==========================================
 
@@ -367,5 +599,48 @@ public class AuthService {
                 refreshTokenExpiration,
                 TimeUnit.MILLISECONDS
         );
+    }
+
+    /**
+     * Kakao 사용자 정보 조회
+     * 
+     * Kakao API 호출하여 사용자 정보 획득
+     * 
+     * API 정보:
+     *   - URL: https://kapi.kakao.com/v2/user/me
+     *   - Method: GET
+     *   - Header: Authorization: Bearer {access_token}
+     *   - Response: JSON (id, kakao_account, properties 등)
+     * 
+     * @param accessToken Kakao에서 발급받은 Access Token
+     * @return 사용자 정보 JSON (JsonNode)
+     * @throws AuthException API 호출 실패 시 AUTH_006
+     */
+    private JsonNode getKakaoUserInfo(String accessToken) {
+        try {
+            // HTTP 헤더 설정
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBearerAuth(accessToken);  // Authorization: Bearer {access_token}
+            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+            // HTTP 요청 엔티티 생성
+            HttpEntity<String> entity = new HttpEntity<>(headers);
+
+            // Kakao API 호출
+            ResponseEntity<String> response = restTemplate.exchange(
+                    KAKAO_USER_INFO_URL,
+                    HttpMethod.GET,
+                    entity,
+                    String.class
+            );
+
+            // 응답 파싱
+            ObjectMapper objectMapper = new ObjectMapper();
+            return objectMapper.readTree(response.getBody());
+
+        } catch (Exception e) {
+            log.error("Kakao 사용자 정보 조회 실패", e);
+            throw new AuthException(ErrorCode.AUTH_KAKAO_TOKEN_INVALID);
+        }
     }
 }

@@ -7,17 +7,22 @@
 -- ============================================
 -- 1. USERS 테이블 (사용자)
 -- ============================================
+
+-- ============================================
+-- 수정 내역: 일반 로그인 지원을 위한 스키마 수정
+-- ============================================
 CREATE TABLE users (
-    user_id BIGSERIAL PRIMARY KEY,
-    email VARCHAR(255) NOT NULL UNIQUE,
-    nickname VARCHAR(50) NOT NULL,
-    provider VARCHAR(20) DEFAULT 'GOOGLE',
-    birth_date DATE NOT NULL,
-    saju_element VARCHAR(10),
-    zodiac_sign VARCHAR(20),
-    avatar_url TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+       user_id BIGSERIAL PRIMARY KEY,
+       email VARCHAR(255) NOT NULL UNIQUE,
+       password VARCHAR(255),                    -- 추가
+       nickname VARCHAR(50) NOT NULL,
+       provider VARCHAR(20) DEFAULT 'LOCAL',     -- GOOGLE → LOCAL
+       birth_date DATE,                          -- NOT NULL 제거
+       saju_element VARCHAR(10),
+       zodiac_sign VARCHAR(20),
+       avatar_url TEXT,
+       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ============================================
