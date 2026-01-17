@@ -104,16 +104,21 @@ package com.madcamp02.controller;
 //
 //
 // 담당 기능:
-//   1. 로그인 (Google OAuth2 ID Token 검증 후 JWT 발급)
-//   2. 토큰 갱신 (Refresh Token으로 새 Access Token 발급)
-//   3. 로그아웃 (Refresh Token 무효화)
-//   4. 현재 사용자 정보 조회
+//   1. 회원가입 (이메일/비밀번호 → JWT 발급)
+//   2. 일반 로그인 (이메일/비밀번호 → JWT 발급)
+//   3. Google OAuth2 로그인 (ID Token 검증 후 JWT 발급)
+//   4. Kakao OAuth2 로그인 (Access Token으로 사용자 정보 조회 후 JWT 발급)
+//   5. 토큰 갱신 (Refresh Token으로 새 Access Token 발급)
+//   6. 로그아웃 (Refresh Token 무효화)
+//   7. 현재 사용자 정보 조회
 //
 // API 엔드포인트: /api/v1/auth/*
 //======================================
 
+import com.madcamp02.dto.request.EmailLoginRequest;
 import com.madcamp02.dto.request.LoginRequest;
 import com.madcamp02.dto.request.RefreshRequest;
+import com.madcamp02.dto.request.SignupRequest;
 import com.madcamp02.dto.response.AuthResponse;
 import com.madcamp02.security.CustomUserDetails;
 import com.madcamp02.service.AuthService;
@@ -140,19 +145,85 @@ public class AuthController {
     private final AuthService authService; //AuthService의 객체와 메서드들로 연결시켜주자
 
     //------------------------------------------
-    // 로그인 API
+    // 회원가입 API
+    //------------------------------------------
+    // 이메일/비밀번호/닉네임으로 일반 회원가입
+    // 
+    // 처리 과정:
+    //   1. 이메일 중복 확인
+    //   2. 비밀번호 암호화 (BCrypt)
+    //   3. 사용자 생성 + 지갑 생성
+    //   4. JWT 발급
+    //
+    // 요청: POST /api/v1/auth/signup
+    // Body: { "email": "...", "password": "...", "nickname": "..." }
+    // 응답: { "accessToken": "...", "refreshToken": "...", ... }
+    //------------------------------------------
+    @Operation(summary = "회원가입", description = "이메일/비밀번호로 회원가입")
+    @PostMapping("/signup")
+    public ResponseEntity<AuthResponse> signup(@Valid @RequestBody SignupRequest request) {
+        AuthResponse response = authService.signup(request);
+        return ResponseEntity.ok(response);
+    }
+
+    //------------------------------------------
+    // 일반 로그인 API (이메일/비밀번호)
+    //------------------------------------------
+    // 이메일/비밀번호로 로그인 (일반 회원가입 사용자용)
+    //
+    // 처리 과정:
+    //   1. 이메일로 사용자 조회
+    //   2. BCrypt로 비밀번호 검증
+    //   3. JWT 발급
+    //
+    // 요청: POST /api/v1/auth/login
+    // Body: { "email": "...", "password": "..." }
+    // 응답: { "accessToken": "...", "refreshToken": "...", ... }
+    //------------------------------------------
+    @Operation(summary = "이메일 로그인", description = "이메일/비밀번호로 로그인")
+    @PostMapping("/login")
+    public ResponseEntity<AuthResponse> emailLogin(@Valid @RequestBody EmailLoginRequest request) {
+        AuthResponse response = authService.emailLogin(request);
+        return ResponseEntity.ok(response);
+    }
+
+    //------------------------------------------
+    // Google OAuth2 로그인 API
     //------------------------------------------
     // 클라이언트가 Google에서 받은 ID Token을 전송하면,
     // 서버가 검증 후 자체 JWT(Access + Refresh)를 발급
     //
-    // 요청: POST /api/v1/auth/login
+    // 요청: POST /api/v1/auth/oauth/google
     // Body: { "provider": "google", "idToken": "..." }
     // 응답: { "accessToken": "...", "refreshToken": "...", ... }
     //------------------------------------------
-    @Operation(summary = "로그인", description = "Google OAuth2 ID Token으로 로그인") // Swagger 문서 설명
-    @PostMapping("/login") // "POST 방식으로 '/login' 주소로 오면 내가 처리할게."
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
+    @Operation(summary = "Google 로그인", description = "Google OAuth2 ID Token으로 로그인")
+    @PostMapping("/oauth/google")
+    public ResponseEntity<AuthResponse> googleLogin(@Valid @RequestBody LoginRequest request) {
         AuthResponse response = authService.login(request);
+        return ResponseEntity.ok(response);
+    }
+
+    //------------------------------------------
+    // Kakao OAuth2 로그인 API
+    //------------------------------------------
+    // 클라이언트가 Kakao에서 받은 Access Token을 전송하면,
+    // 서버가 Kakao API를 통해 사용자 정보 조회 후 JWT 발급
+    //
+    // Google vs Kakao 차이:
+    //   - Google: ID Token (JWT 형식) 직접 검증
+    //   - Kakao: Access Token으로 Kakao API 호출하여 사용자 정보 획득
+    //
+    // 요청: POST /api/v1/auth/oauth/kakao
+    // Body: { "accessToken": "..." }
+    // 응답: { "accessToken": "...", "refreshToken": "...", ... }
+    //------------------------------------------
+    @Operation(summary = "Kakao 로그인", description = "Kakao OAuth2 Access Token으로 로그인")
+    @PostMapping("/oauth/kakao")
+    public ResponseEntity<AuthResponse> kakaoLogin(@RequestBody java.util.Map<String, String> request) {
+        // 요청 바디에서 accessToken 추출
+        String accessToken = request.get("accessToken");
+        AuthResponse response = authService.kakaoLogin(accessToken);
         return ResponseEntity.ok(response);
     }
 

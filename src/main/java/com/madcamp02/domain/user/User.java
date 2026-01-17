@@ -37,13 +37,18 @@ public class User {
     @Column(nullable = false, unique = true, length = 255)
     private String email;
 
+    // 🆕 password 필드 추가 (일반 로그인용, OAuth 사용자는 null)
+    @Column(length = 255)
+    private String password;
+
     @Column(nullable = false, length = 50)
     private String nickname;
 
     @Column(length = 20)
     private String provider;
 
-    @Column(name = "birth_date", nullable = false)
+    // 🔧 nullable = false 제거
+    @Column(name = "birth_date")
     private LocalDate birthDate;
 
     @Column(name = "saju_element", length = 10)
@@ -112,12 +117,14 @@ User user = User.builder()
 
         //이렇게 쉽게 파라미터 대신에 메서드로 객체를 생성하려고 만든 것것
     */
+    //수정사항 : Builder 수정 - password 파라미터 추가
     @Builder
-    public User(String email, String nickname, String provider,
+    public User(String email, String password, String nickname, String provider,
                 LocalDate birthDate, String sajuElement, String zodiacSign) {
         this.email = email;
+        this.password = password;  // 🆕 추가
         this.nickname = nickname;
-        this.provider = provider != null ? provider : "GOOGLE";
+        this.provider = provider != null ? provider : "LOCAL";  // 🔧 기본값 변경
         this.birthDate = birthDate;
         this.sajuElement = sajuElement;
         this.zodiacSign = zodiacSign;

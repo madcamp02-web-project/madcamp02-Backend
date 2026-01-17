@@ -55,8 +55,14 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       JWT_SECRET: ${JWT_SECRET:-your-256-bit-secret-key-here-change-in-production-minimum-32-characters}
+      # ========== OAuth 설정 (백엔드 주도 방식) ==========
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID}           # Kakao OAuth 앱 REST API 키
+      KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET}   # Kakao OAuth 앱 Client Secret
+      # OAuth2 로그인 성공 후 프론트엔드로 리다이렉트할 URI
+      OAUTH2_REDIRECT_URI: ${OAUTH2_REDIRECT_URI:-http://localhost:3000/oauth/callback}
+      # ========== 외부 API ==========
       FINNHUB_API_KEY: ${FINNHUB_API_KEY:-sandbox_api_key}
     ports:
       - "8080:8080"
