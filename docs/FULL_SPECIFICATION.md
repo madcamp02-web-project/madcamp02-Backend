@@ -189,6 +189,7 @@ Finnhub 실시간 주가 데이터를 기반으로, **사용자의 투자 성과
 |-----|------|
 | Finnhub | 미국 주식 실시간 데이터 |
 | Google OAuth2 | 소셜 로그인 |
+| 🆕 Kakao OAuth2 | 소셜 로그인 (카카오) |
 
 ---
 
@@ -257,9 +258,10 @@ Finnhub 실시간 주가 데이터를 기반으로, **사용자의 투자 성과
 CREATE TABLE users (
     user_id BIGSERIAL PRIMARY KEY,
     email VARCHAR(255) NOT NULL UNIQUE,
+    password VARCHAR(255),             -- 🆕 일반 회원용 (BCrypt 암호화), OAuth는 NULL
     nickname VARCHAR(50) NOT NULL,
-    provider VARCHAR(20) DEFAULT 'GOOGLE',
-    birth_date DATE NOT NULL,
+    provider VARCHAR(20) DEFAULT 'LOCAL',  -- 🆕 LOCAL, GOOGLE, KAKAO
+    birth_date DATE,                   -- 🆕 NULL 허용 (온보딩에서 입력)
     saju_element VARCHAR(10),          -- FIRE, WATER, WOOD, GOLD, EARTH
     zodiac_sign VARCHAR(20),           -- 띠 (Dragon, Snake, etc.)
     avatar_url TEXT,
@@ -413,18 +415,54 @@ CREATE INDEX idx_notif_unread ON notifications(user_id, is_read);
 
 | Method | Endpoint | 설명 | 인증 |
 |--------|----------|------|------|
-| POST | `/api/v1/auth/login` | OAuth2 로그인 토큰 검증 | ❌ |
+| POST | `/api/v1/auth/signup` | 🆕 일반 회원가입 | ❌ |
+| POST | `/api/v1/auth/login` | 🆕 일반 로그인 (이메일/비밀번호) | ❌ |
+| POST | `/api/v1/auth/oauth/google` | Google OAuth 로그인 | ❌ |
+| POST | `/api/v1/auth/oauth/kakao` | 🆕 Kakao OAuth 로그인 | ❌ |
 | POST | `/api/v1/auth/refresh` | Access Token 갱신 | ❌ |
 | POST | `/api/v1/auth/logout` | 로그아웃 | ✅ |
 | GET | `/api/v1/auth/me` | 현재 사용자 정보 | ✅ |
 
-#### POST /api/v1/auth/login
+#### POST /api/v1/auth/signup 🆕
+
+일반 회원가입 (이메일, 비밀번호, 닉네임)
 
 **Request:**
 ```json
 {
-  "provider": "google",
-  "idToken": "eyJhbGciOiJSUzI1NiIsInR5cCI6..."
+  "email": "user@example.com",
+  "password": "securePassword123!",
+  "nickname": "투자도사"
+}
+```
+
+**Response (201):**
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6...",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6...",
+  "expiresIn": 3600,
+  "user": {
+    "userId": 1,
+    "email": "user@example.com",
+    "nickname": "투자도사",
+    "provider": "LOCAL",
+    "sajuElement": null,
+    "avatarUrl": null
+  },
+  "isNewUser": true
+}
+```
+
+#### POST /api/v1/auth/login 🆕
+
+일반 로그인 (이메일/비밀번호)
+
+**Request:**
+```json
+{
+  "email": "user@example.com",
+  "password": "securePassword123!"
 }
 ```
 
@@ -436,8 +474,51 @@ CREATE INDEX idx_notif_unread ON notifications(user_id, is_read);
   "expiresIn": 3600,
   "user": {
     "userId": 1,
+    "email": "user@example.com",
+    "nickname": "투자도사",
+    "provider": "LOCAL",
+    "sajuElement": "FIRE",
+    "avatarUrl": "/avatars/1.jpg"
+  },
+  "isNewUser": false
+}
+```
+
+#### POST /api/v1/auth/oauth/google
+
+Google OAuth 로그인 (기존)
+
+**Request:**
+```json
+{
+  "provider": "google",
+  "idToken": "eyJhbGciOiJSUzI1NiIsInR5cCI6..."
+}
+```
+
+#### POST /api/v1/auth/oauth/kakao 🆕
+
+Kakao OAuth 로그인
+
+**Request:**
+```json
+{
+  "provider": "kakao",
+  "accessToken": "카카오_액세스_토큰"
+}
+```
+
+**Response (200):** (공통)
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6...",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6...",
+  "expiresIn": 3600,
+  "user": {
+    "userId": 1,
     "email": "user@gmail.com",
     "nickname": "투자도사",
+    "provider": "GOOGLE",
     "sajuElement": "FIRE",
     "avatarUrl": "/avatars/1.jpg"
   },
@@ -704,9 +785,11 @@ data: {"messageId": 123, "sentimentScore": 0.75}
 ├── 📁 ranking/
 │   └── page.tsx                    # ✅ 랭킹 (포디움 + 전체 순위)
 ├── 📁 login/
-│   └── page.tsx                    # 🆕 로그인 페이지 (Google OAuth)
+│   └── page.tsx                    # 🆕 로그인 (일반 + Google + Kakao OAuth)
+├── 📁 signup/
+│   └── page.tsx                    # 🆕 회원가입 (이메일/비밀번호/닉네임)
 ├── 📁 onboarding/
-│   └── page.tsx                    # 🆕 온보딩 (생년월일/닉네임 입력)
+│   └── page.tsx                    # 🆕 온보딩 (생년월일 입력 → 사주 계산)
 ├── 📁 calculator/
 │   └── page.tsx                    # 🆕 배당금 계산기
 ├── loading.tsx                     # 🆕 글로벌 로딩
@@ -714,8 +797,9 @@ data: {"messageId": 123, "sentimentScore": 0.75}
 
 📁 components/
 ├── 📁 auth/                        # 🆕 인증 컴포넌트
-│   ├── login-form.tsx              # 🆕 Google OAuth 버튼
-│   ├── onboarding-form.tsx         # 🆕 온보딩 폼
+│   ├── login-form.tsx              # 🆕 일반 로그인 + OAuth 버튼
+│   ├── signup-form.tsx             # 🆕 일반 회원가입 폼
+│   ├── onboarding-form.tsx         # 🆕 온보딩 폼 (사주 계산)
 │   └── protected-route.tsx         # 🆕 인증 보호 래퍼
 │
 ├── 📁 dashboard/                   # 대시보드 컴포넌트
@@ -838,7 +922,8 @@ data: {"messageId": 123, "sentimentScore": 0.75}
 | `/gacha` | `app/gacha/page.tsx` | ✅ | ✅ 구현됨 | 가챠 (캡슐 토이) |
 | `/ranking` | `app/ranking/page.tsx` | ✅ | ✅ 구현됨 | 랭킹 (포디움) |
 | `/mypage` | `app/mypage/page.tsx` | ✅ | ✅ 구현됨 | 마이페이지 (4탭) |
-| `/login` | `app/login/page.tsx` | ❌ | 🆕 필요 | Google OAuth |
+| `/login` | `app/login/page.tsx` | ❌ | 🆕 필요 | 일반 + Google + Kakao OAuth |
+| `/signup` | `app/signup/page.tsx` | ❌ | 🆕 필요 | 일반 회원가입 |
 | `/onboarding` | `app/onboarding/page.tsx` | ✅ | 🆕 필요 | 생년월일 입력 |
 | `/calculator` | `app/calculator/page.tsx` | ✅ | 🆕 필요 | 배당금 계산기 |
 
@@ -1216,31 +1301,50 @@ ws://api.madcamp02.com/ws
 
 ## 11. 보안 및 인증
 
-### 11.1 인증 흐름
+### 11.1 인증 방식 (3가지) 🆕
 
+| 방식 | provider | 엔드포인트 | 설명 |
+|------|----------|-----------|------|
+| 일반 회원가입 | `LOCAL` | `/auth/signup` | 이메일 + 비밀번호 + 닉네임 |
+| 일반 로그인 | `LOCAL` | `/auth/login` | 이메일 + 비밀번호 |
+| Google OAuth | `GOOGLE` | `/auth/oauth/google` | Google ID Token |
+| Kakao OAuth | `KAKAO` | `/auth/oauth/kakao` | Kakao Access Token |
+
+### 11.2 인증 흐름
+
+#### 일반 회원가입/로그인 🆕
 ```
-1. 사용자 → Google 로그인 → ID Token 획득
-2. 클라이언트 → POST /api/v1/auth/login (ID Token)
-3. 서버 → Google 토큰 검증
-4. 서버 → JWT Access Token (1h) + Refresh Token (7d) 발급
-5. 클라이언트 → Access Token을 Authorization 헤더에 포함
-6. 만료 시 → POST /api/v1/auth/refresh (Refresh Token)
+1. 회원가입: POST /auth/signup {email, password, nickname}
+2. 서버 → 이메일 중복 체크 → BCrypt 암호화 → User 생성
+3. JWT Access Token (1h) + Refresh Token (7d) 발급
+---
+4. 로그인: POST /auth/login {email, password}
+5. 서버 → BCrypt 비밀번호 검증 → JWT 발급
 ```
 
-### 11.2 JWT 구조
+#### OAuth 로그인 (Google / Kakao)
+```
+1. 사용자 → Google/Kakao 로그인 → Token 획득
+2. POST /auth/oauth/google (또는 /kakao) {provider, idToken/accessToken}
+3. 서버 → OAuth Provider에 토큰 검증 요청
+4. 서버 → 사용자 조회/생성 → JWT 발급
+```
+
+### 11.3 JWT 구조
 
 ```json
 {
   "sub": "1",
   "email": "user@gmail.com",
   "nickname": "투자도사",
+  "provider": "LOCAL",
   "role": "USER",
   "iat": 1705392000,
   "exp": 1705395600
 }
 ```
 
-### 11.3 보안 설정
+### 11.4 보안 설정
 
 | 항목 | 설정 |
 |------|------|
@@ -1249,6 +1353,7 @@ ws://api.madcamp02.com/ws
 | SQL Injection | Prepared Statement 사용 |
 | XSS | CSP 헤더 설정 |
 | HTTPS | TLS 1.3 강제 |
+| Password | 🆕 BCrypt 암호화 (일반 회원) |
 
 ---
 
@@ -1377,8 +1482,14 @@ NEXT_PUBLIC_API_URL=https://api.madcamp02.com
 NEXT_PUBLIC_WS_URL=wss://api.madcamp02.com/ws
 NEXTAUTH_URL=https://madcamp02.com
 NEXTAUTH_SECRET=xxx
+
+# Google OAuth
 GOOGLE_CLIENT_ID=xxx
 GOOGLE_CLIENT_SECRET=xxx
+
+# 🆕 Kakao OAuth
+KAKAO_CLIENT_ID=xxx
+KAKAO_CLIENT_SECRET=xxx
 ```
 
 #### Backend (application.yml)
@@ -1401,6 +1512,14 @@ jwt:
   secret: ${JWT_SECRET}
   access-expiration: 3600000
   refresh-expiration: 604800000
+
+# 🆕 OAuth 설정
+oauth:
+  google:
+    client-id: ${GOOGLE_CLIENT_ID}
+  kakao:
+    client-id: ${KAKAO_CLIENT_ID}
+    client-secret: ${KAKAO_CLIENT_SECRET}
 ```
 
 ---
@@ -1472,18 +1591,63 @@ jwt:
 
 ### B. 에러 코드
 
-| 코드 | 설명 |
-|------|------|
-| AUTH_001 | 토큰 만료 |
-| AUTH_002 | 유효하지 않은 토큰 |
-| TRADE_001 | 잔고 부족 |
-| TRADE_002 | 보유 수량 부족 |
-| TRADE_003 | 거래 시간 외 |
-| GAME_001 | 코인 부족 |
-| GAME_002 | 이미 보유한 아이템 |
+> 에러 응답은 `ErrorResponse` DTO를 통해 일관된 형식으로 반환됩니다.
+> 
+> ```json
+> {
+>   "timestamp": "2026-01-17T12:00:00",
+>   "status": 400,
+>   "error": "TRADE_001",
+>   "message": "잔고가 부족합니다."
+> }
+> ```
+
+| 코드 | 설명 | HTTP 상태 |
+|------|------|----------|
+| **인증 (AUTH)** |||
+| AUTH_001 | 토큰 만료 | 401 |
+| AUTH_002 | 유효하지 않은 토큰 | 401 |
+| AUTH_003 | 권한 없음 | 403 |
+| AUTH_004 | 사용자 없음 | 404 |
+| AUTH_005 | Google 토큰 검증 실패 | 401 |
+| AUTH_006 | 🆕 Kakao 토큰 검증 실패 | 401 |
+| AUTH_007 | 🆕 비밀번호 불일치 | 401 |
+| AUTH_008 | 🆕 이메일 중복 (회원가입) | 409 |
+| **거래 (TRADE)** |||
+| TRADE_001 | 잔고 부족 | 400 |
+| TRADE_002 | 보유 수량 부족 | 400 |
+| TRADE_003 | 거래 시간 외 | 400 |
+| TRADE_004 | 유효하지 않은 종목 | 400 |
+| **게임 (GAME)** |||
+| GAME_001 | 코인 부족 | 400 |
+| GAME_002 | 이미 보유한 아이템 | 409 |
+| GAME_003 | 아이템 없음 | 404 |
+| **사용자 (USER)** |||
+| USER_001 | 사용자 없음 | 404 |
+| USER_002 | 이미 존재하는 사용자 | 409 |
+| **서버 (SERVER)** |||
+| SERVER_001 | 내부 서버 오류 | 500 |
+| SERVER_002 | 외부 API 호출 실패 | 503 |
+| **검증 (VALIDATION)** |||
+| VALIDATION_ERROR | 입력값 검증 실패 | 400 |
+| BIND_ERROR | 요청 데이터 바인딩 실패 | 400 |
+
+### C. 예외 처리 구조
+
+```
+com.madcamp02.exception/
+├── ErrorCode.java              # 에러 코드 enum (명세서 순서 기준)
+├── ErrorResponse.java          # 에러 응답 DTO (팩토리 메서드 포함)
+├── BusinessException.java      # 기본 비즈니스 예외 (부모 클래스)
+├── AuthException.java          # 인증 예외 (AUTH_001~005)
+├── TradeException.java         # 거래 예외 (TRADE_001~004)
+├── GameException.java          # 게임 예외 (GAME_001~003)
+├── UserException.java          # 사용자 예외 (USER_001~002)
+└── GlobalExceptionHandler.java # 전역 예외 핸들러
+```
 
 ---
 
-**문서 버전:** 2.0  
-**최종 수정일:** 2026-01-16  
+**문서 버전:** 2.2 (🆕 카카오 OAuth, 일반 회원가입/로그인 추가)  
+**최종 수정일:** 2026-01-17  
 **작성자:** MadCamp02 개발팀
