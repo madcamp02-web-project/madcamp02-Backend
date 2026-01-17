@@ -23,7 +23,7 @@ services:
     image: redis:7.2
     container_name: madcamp02-redis
     environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
     ports:
       - "6379:6379"
     volumes:
@@ -34,6 +34,37 @@ services:
       timeout: 5s
       retries: 5
     command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
+    restart: unless-stopped
+
+  # ============================================
+  # Backend (Spring Boot)
+  # ============================================
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: madcamp02-backend
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-madcamp02-backend}
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      JWT_SECRET: ${JWT_SECRET:-your-256-bit-secret-key-here-change-in-production-minimum-32-characters}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      FINNHUB_API_KEY: ${FINNHUB_API_KEY:-sandbox_api_key}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

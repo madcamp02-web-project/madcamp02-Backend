@@ -1,0 +1,50 @@
+# ============================================
+# MadCamp02 Backend - Docker Ignore
+# ============================================
+
+# Git
+.git
+.gitignore
+
+# Gradle
+.gradle
+build
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea
+*.iml
+.vscode
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation (빌드에 불필요)
+docs/
+*.md
+!README.md
+
+# Test files
+src/test/
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Misc
+*.bak
+*.tmp
+*.temp
