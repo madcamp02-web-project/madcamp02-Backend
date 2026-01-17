@@ -1,0 +1,240 @@
+package com.madcamp02.controller;
+
+// 말 그대로 Controller 역할
+// 사용자의 요청을 가장 먼저 받는 창구(Reception)
+// 클라이언트의 요청을 제일 먼저 받는(http를 받는) 제일 앞 창구같은 역할
+
+//AuthService는 실제 업무를 하고
+//AuthController는 클라이언트의 요청을 접수하고, 결과물을 전달해 주는 역할
+
+
+//Lombak과 @RequiredArgsConstructor에 대한 나의 이해
+//"final이 붙은 친구들(AuthService)을 자동으로 연결(주입)
+
+//내 질문: Lombak은 그냥 객체를 쓸때 생성자 내가 안만들고 알아서 만들어주면 거기의 메서드만 불러서 사용하는 거냐?
+/*
+맞긴 한데 예시를 보면서 더 이해를 하라고 함.
+
+1. 내가 표현상에서 쓰는 Lombak을 이용한 코드 (소스 코드) 👀
+님은 코드에 변수(재료)만 선언하고, 위에 어노테이션(지시사항)만 붙였습니다.
+생성자나 get... 같은 메서드는 코드를 짜지 않았죠.
+
+        Java
+        // 롬복에게 지시: "생성자랑, Getter 다 만들어 줘"
+        @RequiredArgsConstructor
+        @Getter
+        public class User {
+            private final String name;  // 변수만 딸랑 있음
+            private final int age;
+        }
+
+
+2. 롬복이 뒤에서 몰래 해준 일 (컴파일 시점) 👻
+컴퓨터가 이 코드를 읽을 때(컴파일할 때),
+롬복이 슥 나타나서 님이 안 짠 코드를 몰래 끼워 넣습니다.
+
+        Java
+        // 실제 실행되는 코드 (롬복이 만들어준 결과물)
+        public class User {
+            private final String name;
+            private final int age;
+
+            // 1. @RequiredArgsConstructor가 만든 생성자
+            public User(String name, int age) {
+                this.name = name;
+                this.age = age;
+            }
+
+            // 2. @Getter가 만든 메서드들
+            public String getName() {
+                return this.name;
+            }
+            public int getAge() {
+                return this.age;
+            }
+        }
+
+3. 님이 사용하는 방법 🛠️
+말씀하신 대로, "어? 나는 메서드 안 만들었는데?" 싶어도 그냥 불러서 쓰면 됩니다.
+
+        Java
+        // 다른 곳에서 사용할 때
+        public void printUser() {
+            // 생성자가 자동으로 만들어졌으니 이렇게 객체 생성 가능!
+            User user = new User("철수", 20);
+
+            // getName()을 짠 적은 없지만, 롬복이 만들어놨으니 호출 가능!
+            System.out.println(user.getName());
+        }
+
+
+💡 우리의 Service파일에 있는 코드인 AuthService(실질적 비즈니스 코드)에서의 핵심!
+//이게 뭐하는 건지 궁금하면 docs의 node vs spring을 참고하자
+
+아까 보셨던 AuthService나 AuthController에서
+@RequiredArgsConstructor를 쓴 이유는
+""""""스프링한테 일 시키기 위해서""""""
+
+        (내가 작성한 코드)
+        변수 선언: private final UserRepository userRepository; (텅 빈 변수)
+
+        (Lombak이 해주는 일)
+        롬복의 마법: @RequiredArgsConstructor가
+            public AuthService(UserRepository repo) { ... } 라는 생성자를 자동으로 만듦.
+
+        (spring boot라는 코드가 수행하는 일)
+        스프링의 동작: 스프링은 "어? 생성자가 있네?
+            내가 관리하는 userRepository를 저기에 넣어줘야겠다(DI)" 하고 알아서 연결해 줌.
+ */
+
+
+
+
+
+
+
+
+
+
+
+//======================================
+// AuthController - 인증 API 컨트롤러
+//======================================
+// 사용자 인증과 관련된 모든 HTTP 요청을 처리하는 REST 컨트롤러
+//
+//
+// 담당 기능:
+//   1. 로그인 (Google OAuth2 ID Token 검증 후 JWT 발급)
+//   2. 토큰 갱신 (Refresh Token으로 새 Access Token 발급)
+//   3. 로그아웃 (Refresh Token 무효화)
+//   4. 현재 사용자 정보 조회
+//
+// API 엔드포인트: /api/v1/auth/*
+//======================================
+
+import com.madcamp02.dto.request.LoginRequest;
+import com.madcamp02.dto.request.RefreshRequest;
+import com.madcamp02.dto.response.AuthResponse;
+import com.madcamp02.security.CustomUserDetails;
+import com.madcamp02.service.AuthService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
+
+@Tag(name = "Auth", description = "인증 API") // 1. Swagger(API 문서)에 "Auth"라는 그룹으로 표시해 줘.
+@RestController // 2. "나는 화면(HTML)을 주는 게 아니라, 데이터(JSON)를 주고받는 컨트롤러야."
+//이렇게 모든 형식을 Json으로 주고 받는것을 Rest api라고 한다
+@RequestMapping("/api/v1/auth") // 3. "내 관할 구역은 'http://서버주소/api/v1/auth' 로 시작하는 모든 요청이야."
+//이렇게 Controller는 관할하는 api 도메인의 범위를 항상 지정해줘야 함
+
+//여기 위에 이 3개의 어노테이션을 먼저 선언을 해줘야 프론트에서 POST /api/v1/auth/login로 요청을 보낼수 있게 됨
+
+@RequiredArgsConstructor // 4. "final이 붙은 친구들(AuthService)을 자동으로 연결(주입)해 줘." --> 항상 쓰는 Lombak
+public class AuthController {
+
+    // AuthService 의존성 주입 (생성자 주입 방식)
+    private final AuthService authService; //AuthService의 객체와 메서드들로 연결시켜주자
+
+    //------------------------------------------
+    // 로그인 API
+    //------------------------------------------
+    // 클라이언트가 Google에서 받은 ID Token을 전송하면,
+    // 서버가 검증 후 자체 JWT(Access + Refresh)를 발급
+    //
+    // 요청: POST /api/v1/auth/login
+    // Body: { "provider": "google", "idToken": "..." }
+    // 응답: { "accessToken": "...", "refreshToken": "...", ... }
+    //------------------------------------------
+    @Operation(summary = "로그인", description = "Google OAuth2 ID Token으로 로그인") // Swagger 문서 설명
+    @PostMapping("/login") // "POST 방식으로 '/login' 주소로 오면 내가 처리할게."
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
+        AuthResponse response = authService.login(request);
+        return ResponseEntity.ok(response);
+    }
+
+
+    //------------------------------------------
+    // 토큰 갱신 API
+    //------------------------------------------
+    // Access Token 만료 시 Refresh Token으로 새 토큰 발급
+    // 
+    // 동작 과정:
+    //   1. 클라이언트가 Refresh Token 전송
+    //   2. 서버가 Redis에서 저장된 토큰과 비교
+    //   3. 유효하면 새 Access Token + Refresh Token 발급 (Rotation)
+    //
+    // 요청: POST /api/v1/auth/refresh
+    // Body: { "refreshToken": "..." }
+    //------------------------------------------
+    @Operation(summary = "토큰 갱신", description = "Refresh Token으로 Access Token 재발급")
+    @PostMapping("/refresh") // POST /refresh 요청
+    public ResponseEntity<AuthResponse> refresh(@Valid @RequestBody RefreshRequest request) {
+
+        // 1. 요청 본문(Body)에서 Refresh Token 문자열을 꺼내서 서비스에 넘깁니다.
+        AuthResponse response = authService.refresh(request.getRefreshToken());
+
+        // 2. 서비스가 만든 새 토큰들을 반환합니다.
+        return ResponseEntity.ok(response);
+    }
+
+    //------------------------------------------
+    // 로그아웃 API
+    //------------------------------------------
+    // Redis에 저장된 Refresh Token 삭제로 세션 무효화
+    // 
+    // 주의: Access Token은 만료될 때까지 유효
+    //       (Blacklist 구현 시 즉시 차단 가능)
+    //
+    // 요청: POST /api/v1/auth/logout
+    // 헤더: Authorization: Bearer {accessToken}
+    //------------------------------------------
+    @Operation(summary = "로그아웃", description = "Refresh Token 무효화")
+    @PostMapping("/logout")
+    // ★ 핵심: @AuthenticationPrincipal
+    // 이 요청을 보낼 때 헤더에 붙인 Access Token을 스프링 시큐리티가 미리 검사
+    // 검사가 통과되면, 토큰 안에 들어있던 유저 정보를 'userDetails'라는 변수에 쏙 넣어줌
+    public ResponseEntity<Void> logout(@AuthenticationPrincipal CustomUserDetails userDetails) {
+
+        // "userDetails.getUserId()"를 통해 로그아웃하려는 사람의 ID(PK)를 꺼냄
+        authService.logout(userDetails.getUserId());
+
+        // 로그아웃은 돌려줄 데이터가 없으므로 "200 OK" 상태만 보냅니다. (build)
+        return ResponseEntity.ok().build();
+
+        //클라이언트가 Authorization: Bearer {토큰} 헤더를 달고 요청 ->
+        //서버 필터가 토큰 해석 ->
+        //userDetails 생성 ->
+        //컨트롤러에 전달 ->
+        //로그아웃 수행
+    }
+
+    //------------------------------------------
+    // 현재 사용자 정보 조회 API
+    //------------------------------------------
+    // JWT에서 추출한 사용자 정보 반환
+    // 
+    // @AuthenticationPrincipal 어노테이션:
+    //   SecurityContext에서 인증된 사용자 정보 자동 주입
+    //
+    // 요청: GET /api/v1/auth/me
+    // 헤더: Authorization: Bearer {accessToken}
+    //------------------------------------------
+    @Operation(summary = "현재 사용자 정보", description = "로그인된 사용자 정보 조회")
+    @GetMapping("/me") // GET /me 요청 처리
+    public ResponseEntity<AuthResponse> me(@AuthenticationPrincipal CustomUserDetails userDetails) {
+        // 서비스(DB)를 거치지 않고, 토큰에서 해석된 정보(userDetails)를 바로 가공해서 반환
+        // 애초에 지금 현재 정보의 경우 token에 가공되어서 base64로 인코딩 된 상태니까
+        // 토큰 정보를 이용하면 DB select문 안해도 되잖아
+
+        // DB 조회를 아끼는 효율적인 방식(중요)
+        return ResponseEntity.ok(AuthResponse.builder()
+                .userId(userDetails.getUserId())
+                .email(userDetails.getEmail())
+                .nickname(userDetails.getNickname())
+                .build());
+    }
+}
