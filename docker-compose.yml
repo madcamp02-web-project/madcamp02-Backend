@@ -5,15 +5,15 @@ services:
     image: postgres:18
     container_name: madcamp02-backend-postgres
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-madcamp02-backend}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-madcamp02-backend}
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
     volumes:
       - postgres_data:/var/lib/postgresql/18/docker
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -23,9 +23,9 @@ services:
     image: redis:7.2
     container_name: madcamp02-redis
     environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -33,7 +33,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     restart: unless-stopped
 
   # ============================================
@@ -45,33 +45,37 @@ services:
       dockerfile: Dockerfile
     container_name: madcamp02-backend
     environment:
-      SPRING_PROFILES_ACTIVE: prod
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: ${POSTGRES_DB:-madcamp02-backend}
-      DB_USERNAME: ${POSTGRES_USER:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-madcamp02-backend}
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      JWT_SECRET: ${JWT_SECRET:-your-256-bit-secret-key-here-change-in-production-minimum-32-characters}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
       # ========== OAuth 설정 (백엔드 주도 방식) ==========
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID}           # Kakao OAuth 앱 REST API 키
-      KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET}   # Kakao OAuth 앱 Client Secret
+      KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID}
+      KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET}
       # OAuth2 로그인 성공 후 프론트엔드로 리다이렉트할 URI
       OAUTH2_REDIRECT_URI: ${OAUTH2_REDIRECT_URI:-http://localhost:3000/oauth/callback}
       # ========== 외부 API ==========
-      FINNHUB_API_KEY: ${FINNHUB_API_KEY:-sandbox_api_key}
+      FINNHUB_API_KEY: ${FINNHUB_API_KEY}
+      # AI 서버 (같은 네트워크) - 현재 AI 서버 컨테이너가 없으므로 로컬 호스트를 가리키거나 추후 추가
+      AI_SERVER_URL: ${AI_SERVER_URL:-http://host.docker.internal:8000}
     ports:
-      - "8080:8080"
+      - "${SERVER_PORT:-8080}:8080"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # 컨테이너에서 로컬 AI 서버 접근 허용
 
 volumes:
   postgres_data:
