@@ -1,6 +1,34 @@
 # 🎨 MadCamp02: 프론트엔드 개발 계획서
 
-**Ver 1.0 - Frontend Development Blueprint**
+**Ver 1.3 - Frontend Development Blueprint**
+
+---
+
+## 📝 변경 이력
+
+| 버전 | 날짜 | 변경 내용 | 작성자 |
+|------|------|----------|--------|
+| 1.0 | 2026-01-15 | 초기 명세서 작성 | MadCamp02 |
+| 1.1 | 2026-01-17 | 카카오 OAuth, 일반 회원가입/로그인 추가 | MadCamp02 |
+| 1.2 | 2026-01-17 | ErrorResponse 에러 처리 가이드 추가 | MadCamp02 |
+| **1.3** | **2026-01-17** | **OAuth2 백엔드 주도 방식으로 변경** | **MadCamp02** |
+
+### Ver 1.3 주요 변경 사항
+
+1. **OAuth2 방식 변경**: 백엔드 주도 방식 적용
+   - 이전: 프론트에서 Kakao SDK로 Access Token 획득 → 백엔드로 전송
+   - 현재: 백엔드 URL로 리다이렉트 → 백엔드가 OAuth 처리 → 프론트로 토큰 전달
+
+2. **프론트엔드 구현 변경 사항**
+   | 항목 | 변경 내용 |
+   |------|----------|
+   | 로그인 버튼 | `window.location.href`로 백엔드 OAuth2 URL 리다이렉트 |
+   | 콜백 페이지 | `/oauth/callback` 페이지 신규 생성 필요 |
+   | 토큰 처리 | URL 쿼리 파라미터에서 토큰 추출 |
+
+3. **삭제된 항목**
+   - Kakao JavaScript SDK 연동 (불필요)
+   - `loginWithKakao(accessToken)` API 함수 (불필요)
 
 ---
 
@@ -211,6 +239,11 @@
 │   │   └── page.tsx                     # 🆕 로그인 (일반 + Google + Kakao OAuth)
 │   ├── 📁 signup/
 │   │   └── page.tsx                     # 🆕 회원가입 (이메일/비밀번호/닉네임)
+│   ├── 📁 oauth/
+│   │   └── 📁 callback/
+│   │       └── page.tsx                 # 🆕 OAuth2 콜백 (백엔드에서 리다이렉트 받음)
+│   │                                    #    - URL 파라미터에서 토큰 추출
+│   │                                    #    - 토큰 저장 후 대시보드/온보딩으로 이동
 │   ├── 📁 onboarding/
 │   │   └── page.tsx                     # 🆕 온보딩 (생년월일 입력 → 사주 계산)
 │   ├── 📁 oracle/
@@ -345,6 +378,7 @@
 |------|--------|---------|------|------|------|
 | `/login` | LoginPage | None | ❌ | 🆕 | 일반 로그인 + OAuth (Google, Kakao) |
 | `/signup` | SignupPage | None | ❌ | 🆕 | 일반 회원가입 |
+| `/oauth/callback` | OAuthCallbackPage | None | ❌ | 🆕 | **OAuth2 콜백 (백엔드에서 토큰 전달받음)** |
 | `/onboarding` | OnboardingPage | None | ✅ | 🆕 | 생년월일 입력 (사주 계산) |
 | `/` | DashboardPage | AppLayout | ✅ | ✅ | 메인 대시보드 |
 | `/oracle` | OraclePage | AppLayout | ✅ | ✅ | AI 도사 상담 |
@@ -1060,15 +1094,32 @@ api.interceptors.response.use(
 ### 7.3 API 모듈 구조
 
 #### `lib/api/auth.ts`
-| 함수 | 메서드 | 엔드포인트 |
-|------|--------|-----------|
+| 함수 | 메서드 | 엔드포인트 | 설명 |
+|------|--------|-----------|------|
 | `signup(email, password, nickname)` | POST | `/api/v1/auth/signup` | 🆕 일반 회원가입 |
 | `login(email, password)` | POST | `/api/v1/auth/login` | 🆕 일반 로그인 |
-| `loginWithGoogle(idToken)` | POST | `/api/v1/auth/oauth/google` | Google OAuth |
-| `loginWithKakao(accessToken)` | POST | `/api/v1/auth/oauth/kakao` | 🆕 Kakao OAuth |
-| `refreshToken()` | POST | `/api/v1/auth/refresh` |
-| `logout()` | POST | `/api/v1/auth/logout` |
-| `getCurrentUser()` | GET | `/api/v1/auth/me` |
+| `redirectToGoogle()` | - | `/oauth2/authorization/google` | 🆕 백엔드 주도 OAuth (리다이렉트) |
+| `redirectToKakao()` | - | `/oauth2/authorization/kakao` | 🆕 백엔드 주도 OAuth (리다이렉트) |
+| `refreshToken()` | POST | `/api/v1/auth/refresh` | 토큰 갱신 |
+| `logout()` | POST | `/api/v1/auth/logout` | 로그아웃 |
+| `getCurrentUser()` | GET | `/api/v1/auth/me` | 현재 사용자 정보 |
+
+**OAuth 로그인 방식 변경 (백엔드 주도):**
+```typescript
+// 로그인 버튼 클릭 시 백엔드로 리다이렉트
+const handleKakaoLogin = () => {
+  window.location.href = `${API_URL}/oauth2/authorization/kakao`;
+};
+
+// OAuth 콜백 페이지 (/oauth/callback)에서 토큰 처리
+// URL: http://localhost:3000/oauth/callback?accessToken=xxx&refreshToken=xxx
+const OAuthCallback = () => {
+  const searchParams = new URLSearchParams(window.location.search);
+  const accessToken = searchParams.get('accessToken');
+  const refreshToken = searchParams.get('refreshToken');
+  // 토큰 저장 후 대시보드로 이동
+};
+```
 
 #### `lib/api/user.ts`
 | 함수 | 메서드 | 엔드포인트 |
@@ -1422,8 +1473,105 @@ pnpm add zustand @stomp/stompjs sockjs-client axios next-auth lightweight-charts
 pnpm add -D @types/sockjs-client @playwright/test
 ```
 
+### C. OAuth2 백엔드 주도 방식 구현 가이드 (Ver 1.3 추가)
+
+#### OAuth 콜백 페이지 구현 (`app/oauth/callback/page.tsx`)
+
+```typescript
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useAuthStore } from '@/stores/auth-store';
+
+export default function OAuthCallbackPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { setToken, setUser } = useAuthStore();
+
+  useEffect(() => {
+    // URL에서 토큰 추출
+    const accessToken = searchParams.get('accessToken');
+    const refreshToken = searchParams.get('refreshToken');
+    const isNewUser = searchParams.get('isNewUser') === 'true';
+
+    if (accessToken && refreshToken) {
+      // 토큰 저장 (localStorage 또는 Zustand)
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('refreshToken', refreshToken);
+      setToken(accessToken);
+
+      // 신규 사용자면 온보딩, 기존 사용자면 대시보드
+      if (isNewUser) {
+        router.replace('/onboarding');
+      } else {
+        router.replace('/');
+      }
+    } else {
+      // 토큰이 없으면 로그인 페이지로
+      router.replace('/login?error=oauth_failed');
+    }
+  }, [searchParams, router, setToken]);
+
+  return (
+    <div className="flex h-screen items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin h-8 w-8 border-4 border-primary rounded-full border-t-transparent mx-auto" />
+        <p className="mt-4 text-muted-foreground">로그인 처리 중...</p>
+      </div>
+    </div>
+  );
+}
+```
+
+#### 로그인 폼에서 OAuth 버튼 구현
+
+```typescript
+// components/auth/login-form.tsx
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+
+const handleGoogleLogin = () => {
+  // 백엔드 OAuth2 엔드포인트로 리다이렉트
+  window.location.href = `${API_URL}/oauth2/authorization/google`;
+};
+
+const handleKakaoLogin = () => {
+  // 백엔드 OAuth2 엔드포인트로 리다이렉트
+  window.location.href = `${API_URL}/oauth2/authorization/kakao`;
+};
+
+// 버튼 예시
+<Button onClick={handleGoogleLogin} variant="outline" className="w-full">
+  <GoogleIcon className="mr-2 h-4 w-4" />
+  Google로 계속하기
+</Button>
+
+<Button onClick={handleKakaoLogin} variant="outline" className="w-full bg-yellow-400">
+  <KakaoIcon className="mr-2 h-4 w-4" />
+  카카오로 계속하기
+</Button>
+```
+
+#### 인증 흐름 요약
+
+```
+1. 사용자가 "카카오로 로그인" 버튼 클릭
+   ↓
+2. window.location.href = "http://localhost:8080/oauth2/authorization/kakao"
+   ↓
+3. 백엔드가 카카오 로그인 페이지로 리다이렉트
+   ↓
+4. 사용자가 카카오 로그인 완료
+   ↓
+5. 백엔드가 JWT 발급 후 프론트엔드로 리다이렉트
+   → http://localhost:3000/oauth/callback?accessToken=xxx&refreshToken=xxx&isNewUser=true
+   ↓
+6. OAuthCallbackPage에서 토큰 저장 후 대시보드로 이동
+```
+
 ---
 
-**문서 버전:** 1.2 (🆕 카카오 OAuth, 일반 회원가입/로그인 추가)  
+**문서 버전:** 1.3 (OAuth2 백엔드 주도 방식 변경)  
 **최종 수정일:** 2026-01-17  
 **작성자:** MadCamp02 개발팀
