@@ -27,6 +27,7 @@
 
 1.  **정합성 기준 고정**: `FULL_SPECIFICATION` 및 프론트/백엔드 개발 계획서(2.7)를 기준으로 API/실시간/인증 인터페이스를 고정하고, 구현을 그 기준에 맞춰 진행.
 2.  **프론트 연동 우선순위 반영**: (1) Hybrid Auth Callback/토큰 저장 → (2) `lib/api` 모듈화 및 401 Refresh/Retry → (3) 페이지 실데이터 치환 → (4) STOMP/SSE 실시간 순으로 연동.
+3.  **향후 실행 계획 추가**: `FRONTEND_DEVELOPMENT_PLAN`, `FULL_SPECIFICATION`을 기준으로 백엔드 구현 순서/산출물을 문서 하단에 명시.
 
 ---
 
@@ -43,6 +44,7 @@
 9. [외부 API 연동](#9-외부-api-연동)
 10. [비즈니스 로직](#10-비즈니스-로직)
 11. [구현 현황 (Status)](#11-구현-현황-status)
+12. [향후 실행 계획 (Next Plan)](#12-향후-실행-계획-next-plan)
 
 ---
 
@@ -99,11 +101,11 @@ MadCamp02 백엔드는 다음 핵심 기능을 담당합니다:
 | 기술 | 버전 | 용도 |
 |------|------|------|
 | Java | 21 LTS | 언어 |
-| Spring Boot | 3.2.x | 프레임워크 |
+| Spring Boot | 3.4.x | 프레임워크 |
 | Spring Security | 6.x | 인증/인가 (OAuth2 Client) |
 | Spring Data JPA | 3.x | ORM |
 | Spring WebSocket | 6.x | 실시간 통신 (STOMP) |
-| QueryDSL | Latest | 동적 쿼리 (랭킹/검색) |
+| SpringDoc OpenAPI | 2.8.x | Swagger/OpenAPI 문서 |
 
 ### 3.2 AI Server (FastAPI)
 
@@ -111,7 +113,7 @@ MadCamp02 백엔드는 다음 핵심 기능을 담당합니다:
 |------|------|------|
 | Python | 3.11+ | 언어 |
 | FastAPI | 0.100+ | API 프레임워크 |
-| LangChain | Latest | LLM 오케스트레이션 |
+| SSE | - | 스트리밍 응답 (Server-Sent Events) |
 
 ---
 
@@ -305,5 +307,80 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
 
 ---
 
-**문서 버전:** 2.7 (Spec-Driven Alignment)
+## 12. 향후 실행 계획 (Next Plan)
+
+**정합성 기준(Single Source of Truth)**  
+`docs/FULL_SPECIFICATION.md` + `docs/FRONTEND_DEVELOPMENT_PLAN.md` (둘 다 v2.7) 기준으로, 백엔드 구현을 아래 순서로 진행합니다.
+
+### 12.1 Phase 0: 인터페이스 고정(프론트 연동 선행)
+
+- **Auth 연동 고정**: `POST /api/v1/auth/*` + `GET /oauth2/authorization/{provider}` + `/oauth/callback` 리다이렉트 파라미터 규약 유지
+- **실시간(STOMP) 엔드포인트 정합성**: 프론트 문서 기준 `Endpoint: /ws-stomp`로 고정하고, 백엔드 보안 예외/설정도 동일하게 맞춤
+- **응답 DTO 확정**: 프론트 페이지가 필요한 최소 필드(지수/뉴스/무버/포트폴리오/인벤토리/랭킹)를 먼저 확정한 뒤 구현
+
+### 12.2 Phase 1: DB/도메인 2.7(2.6 목표 포함) 정합성 (Blocking)
+
+- **Flyway V2**: `users.is_public`, `users.is_ranking_joined` 컬럼 추가(+ 기본값 TRUE)
+- **Flyway V3**: `items.category`를 `NAMEPLATE/AVATAR/THEME` 체계로 전환/매핑(기존 데이터 대응 포함)
+- **Entity 정합화**:
+  - `User`에 공개/랭킹참여 필드 및 업데이트 메서드 추가
+  - `Item.Category` Enum을 목표 체계로 변경(레거시 매핑 전략 문서화)
+
+### 12.3 Phase 2: User/Onboarding API (프론트 Phase 1~2 연동 핵심)
+
+- **구현 대상**: `UserController`, `UserService`
+- **엔드포인트**:
+  - `GET /api/v1/user/me`
+  - `PUT /api/v1/user/me` (nickname, is_public, is_ranking_joined 등)
+  - `POST /api/v1/user/onboarding`
+  - `GET /api/v1/user/wallet`
+
+### 12.4 Phase 3: Market/Stock API (프론트 `/market`, `/trade` 실데이터 치환)
+
+- **구현 대상**: `MarketController/Service`, `StockController/Service` (+ Finnhub REST 연동)
+- **엔드포인트**:
+  - `GET /api/v1/market/indices`
+  - `GET /api/v1/market/news`
+  - `GET /api/v1/market/movers`
+  - `GET /api/v1/stock/search`
+  - `GET /api/v1/stock/quote/{ticker}`
+  - `GET /api/v1/stock/candles/{ticker}`
+- **캐시 전략(권장)**: indices/news/movers는 Redis TTL 기반 캐시로 비용/지연 최소화
+
+### 12.5 Phase 4: Trade/Portfolio Engine (프론트 `/trade`, `/portfolio` 완성)
+
+- **구현 대상**: `TradeController/Service`, `PortfolioService`, `WalletService`
+- **엔드포인트**:
+  - `GET /api/v1/trade/available-balance`
+  - `POST /api/v1/trade/order`
+  - `GET /api/v1/trade/portfolio`
+  - `GET /api/v1/trade/history`
+- **무결성**: 동시 요청 대비 트랜잭션/락 전략을 명확히 하고(명세서의 흐름 그대로) 테스트로 고정
+
+### 12.6 Phase 5: Shop/Game/Ranking (프론트 `/shop`, `/mypage`, `/ranking`)
+
+- **구현 대상**: `GameController`, `GachaService`, `InventoryService`, `RankingService`
+- **엔드포인트**:
+  - `GET /api/v1/game/items` (Query: `category`)
+  - `POST /api/v1/game/gacha`
+  - `GET /api/v1/game/inventory`
+  - `PUT /api/v1/game/equip/{itemId}`
+  - `GET /api/v1/game/ranking` (랭킹 참여 토글 반영)
+
+### 12.7 Phase 6: 실시간(STOMP) + 알림(선택/후순위)
+
+- **구현 대상**: `WebSocketConfig`, Stock broadcast/Trade notification handler
+- **토픽(프론트 문서 기준)**:
+  - `/topic/stock.indices`
+  - `/topic/stock.ticker.{ticker}`
+  - `/user/queue/trade`
+
+### 12.8 Phase 7: AI(SSE) 연동 (프론트 `/oracle`)
+
+- **구현 대상**: `ChatController`(SSE), `ChatHistory` 저장, AI 서버 프록시/클라이언트
+- **엔드포인트**: `POST /api/v1/chat/ask` (SSE 스트리밍)
+
+---
+
+**문서 버전:** 2.7 (Spec-Driven Alignment)  
 **최종 수정일:** 2026-01-18
