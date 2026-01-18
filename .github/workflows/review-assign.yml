@@ -3,7 +3,12 @@ name: Review Assign
 
 on:
   pull_request:
-    types: [opened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
 
 jobs:
   assign:
@@ -13,4 +18,4 @@ jobs:
         with:
           assignees: ${{ github.actor }}  # PR 작성자를 담당자로 설정
           reviewers: m9-m9,nno3onn    # 리뷰어 목록
-          exclude-author: true            # 작성자는 리뷰어에서 
+          exclude-author: true            # 작성자는 리뷰어에서 제외
