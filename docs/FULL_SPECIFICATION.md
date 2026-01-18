@@ -1,6 +1,6 @@
 # 📁 MadCamp02: 최종 통합 명세서
 
-**Ver 2.7.3 - Complete Edition (Spec-Driven Alignment)**
+**Ver 2.7.4 - Complete Edition (Spec-Driven Alignment)**
 
 ---
 
@@ -20,6 +20,7 @@
 | **2.7.1** | **2026-01-18** | **Phase 0: 응답 DTO(최소 필드) 규약/예시 JSON 추가 + STOMP 엔드포인트(`/ws-stomp`) 정합성 고정** | **MadCamp02** |
 | **2.7.2** | **2026-01-18** | **테스트 경로 정규화(src/test/java) 반영 및 CI/CD 단계의 테스트 전략(후속) 명시** | **MadCamp02** |
 | **2.7.3** | **2026-01-18** | **Phase 1: `items.category` 레거시→목표 매핑 표 및 Unknown 값 마이그레이션 실패(raise) 정책 고정** | **MadCamp02** |
+| **2.7.4** | **2026-01-18** | **Phase 2 확장: 정밀 사주 계산(성별/양력음력/시간 포함) 및 타인 프로필 공개 API DTO 분리** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -45,6 +46,11 @@
 ### Ver 2.7.3 주요 변경 사항
 
 1.  **`items.category` 정합성 정책(Fail Fast) 고정**: 레거시→목표 카테고리 매핑 표를 명시하고, Unknown 값이 남아있으면 Flyway V3 마이그레이션을 실패(raise)시켜 배포를 차단.
+
+### Ver 2.7.4 주요 변경 사항
+
+1.  **정밀 사주 계산 확장**: Phase 2에서 성별(`gender`), 양력/음력 구분(`calendar_type`), 생년월일시(`birth_time`)까지 포함한 정밀 사주 계산으로 확장. `users` 테이블에 `birth_time`(TIME), `gender`(VARCHAR), `calendar_type`(VARCHAR) 컬럼 추가 (Flyway V4).
+2.  **타인 프로필 공개 API DTO 분리**: `UserMeResponse`(내 정보, email 포함)와 `UserPublicResponse`(타인 정보, email 제외)를 분리하여 보안 강화.
 
 ---
 
@@ -204,7 +210,10 @@ CREATE TABLE users (
     password VARCHAR(255),             -- 일반 회원용 (BCrypt)
     nickname VARCHAR(50) NOT NULL,
     provider VARCHAR(20) DEFAULT 'LOCAL', -- LOCAL, GOOGLE, KAKAO
-    birth_date DATE,                   -- 온보딩 입력
+    birth_date DATE,                   -- 온보딩 입력 (양력/음력)
+    birth_time TIME,                   -- 🆕 생년월일시 (기본값 12:00:00)
+    gender VARCHAR(10),                -- 🆕 성별 (MALE/FEMALE/OTHER)
+    calendar_type VARCHAR(20),         -- 🆕 양력/음력 구분 (SOLAR/LUNAR/LUNAR_LEAP)
     saju_element VARCHAR(10),          -- FIRE, WATER, WOOD, GOLD, EARTH
     zodiac_sign VARCHAR(20),           -- 띠
     avatar_url TEXT,
@@ -438,10 +447,11 @@ Flyway V3에서 아래 매핑으로 **기존 데이터(category 문자열)**를 
 
 | Method | Endpoint | 설명 |
 |--------|----------|------|
-| GET | `/me` | 내 프로필 상세 조회 |
+| GET | `/me` | 내 프로필 상세 조회 (`UserMeResponse`, email 포함) |
 | PUT | `/me` | 프로필/설정 수정 (닉네임, 공개여부 등) |
-| POST | `/onboarding` | 온보딩 (생년월일 입력 및 사주 계산) |
+| POST | `/onboarding` | 온보딩 (정밀 사주 계산: 성별/양력음력/시간 포함) |
 | GET | `/wallet` | 지갑 정보 (예수금, 코인 등) |
+| GET | `/{userId}` | 타인 프로필 공개 조회 (향후, `UserPublicResponse`, email 제외) |
 
 ### 5.3 시장/주식 API (`/api/v1/market`, `/api/v1/stock`) 🆕
 
@@ -546,5 +556,5 @@ MadCamp02는 유연한 연동을 위해 두 가지 인증 흐름을 모두 제�
 
 ---
 
-**문서 버전:** 2.7.3 (Spec-Driven Alignment)
+**문서 버전:** 2.7.4 (Spec-Driven Alignment)  
 **최종 수정일:** 2026-01-18

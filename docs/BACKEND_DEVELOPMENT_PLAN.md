@@ -46,6 +46,12 @@
 
 1.  **`items.category` 레거시 정합화 정책 고정**: Flyway V3에서의 레거시→목표 매핑 표를 명시하고, Unknown 값 발견 시 마이그레이션을 실패(raise)시키는 Fail Fast 정책을 고정.
 
+### Ver 2.7.4 주요 변경 사항
+
+1.  **정밀 사주 계산 확장**: Phase 2에서 성별(`gender`), 양력/음력 구분(`calendar_type`), 생년월일시(`birth_time`)까지 포함한 정밀 사주 계산으로 확장. Flyway V4로 `users` 테이블에 `birth_time`(TIME), `gender`(VARCHAR), `calendar_type`(VARCHAR) 컬럼 추가.
+2.  **타인 프로필 공개 API DTO 분리**: `UserMeResponse`(내 정보, email 포함)와 `UserPublicResponse`(타인 정보, email 제외)를 분리하여 보안 강화.
+3.  **SajuCalculator 정밀 계산 확장**: `calculatePrecise()` 메서드 추가로 연주/월주/일주/시주까지 포함한 정밀 사주 계산 지원.
+
 ---
 
 ## 📋 목차
@@ -303,9 +309,15 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
 4.  결과 DTO 반환
 
 ### 10.2 사주 분석 로직 (`SajuCalculator`)
-1.  생년월일 기반 천간(Heavenly Stem) 지지(Earthly Branch) 계산
+1.  정밀 사주 계산 (Phase 2 확장):
+    - 입력: 생년월일(양력/음력), 생년월일시, 성별
+    - 연주(年柱): 연도 기준 천간/지지
+    - 월주(月柱): 월 기준 천간/지지
+    - 일주(日柱): 일 기준 천간/지지 (오행은 일주 천간 기준)
+    - 시주(時柱): 시간 기준 천간/지지
 2.  오행(Wood, Fire, Earth, Metal, Water) 도출
 3.  오행별 투자 성향 매핑 (DB 또는 Enum 관리)
+4.  음력 변환: 향후 외부 라이브러리 통합 예정 (현재는 양력 기준)
 
 ---
 
@@ -365,12 +377,21 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
 
 ### 12.3 Phase 2: User/Onboarding API (프론트 Phase 1~2 연동 핵심)
 
-- **구현 대상**: `UserController`, `UserService`
+- **구현 대상**: `UserController`, `UserService`, `SajuCalculator`
 - **엔드포인트**:
-  - `GET /api/v1/user/me`
+  - `GET /api/v1/user/me` (`UserMeResponse`, email 포함)
   - `PUT /api/v1/user/me` (nickname, is_public, is_ranking_joined 등)
-  - `POST /api/v1/user/onboarding`
+  - `POST /api/v1/user/onboarding` (정밀 사주 계산: 성별/양력음력/시간 포함)
   - `GET /api/v1/user/wallet`
+- **DB 스키마 확장 (Flyway V4)**:
+  - `users.birth_time` (TIME): 생년월일시 (기본값 12:00:00)
+  - `users.gender` (VARCHAR): 성별 (MALE/FEMALE/OTHER)
+  - `users.calendar_type` (VARCHAR): 양력/음력 구분 (SOLAR/LUNAR/LUNAR_LEAP)
+- **정밀 사주 계산**:
+  - `SajuCalculator.calculatePrecise()`: 연주/월주/일주/시주까지 포함한 정밀 계산
+  - 음력 변환은 향후 외부 라이브러리 통합 예정 (현재는 양력 기준)
+- **타인 프로필 공개 API (향후)**:
+  - `GET /api/v1/user/{userId}` (`UserPublicResponse`, email 제외)
 
 ### 12.4 Phase 3: Market/Stock API (프론트 `/market`, `/trade` 실데이터 치환)
 
@@ -433,5 +454,5 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
 
 ---
 
-**문서 버전:** 2.7.3 (Spec-Driven Alignment)  
+**문서 버전:** 2.7.4 (Spec-Driven Alignment)  
 **최종 수정일:** 2026-01-18

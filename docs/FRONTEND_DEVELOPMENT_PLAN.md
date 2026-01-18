@@ -41,6 +41,11 @@
 
 1.  **상점/인벤토리 카테고리 규약 고정**: 프론트에서 사용하는 아이템 카테고리를 `NAMEPLATE | AVATAR | THEME`로 고정하고, 레거시 값은 백엔드 Flyway V3에서 정리되며 Unknown 값은 마이그레이션 실패(raise)로 차단됨을 명시.
 
+### Ver 2.7.4 주요 변경 사항
+
+1.  **온보딩 UI 확장**: Phase 2에서 정밀 사주 계산을 위해 성별(`gender`: MALE/FEMALE/OTHER), 양력/음력 구분(`calendarType`: SOLAR/LUNAR/LUNAR_LEAP), 생년월일시(`birthTime`: HH:mm, 선택, 기본값 12:00) 입력 필드를 추가해야 함.
+2.  **온보딩 요청 DTO 확장**: `POST /api/v1/user/onboarding` 요청 Body에 `gender`, `calendarType`, `birthTime` 필드 추가 (기존 `birthDate`는 유지).
+
 ---
 
 ## 📋 목차
@@ -195,8 +200,13 @@ src/
 *   **회원가입 (`/signup`)**: 이메일, 비밀번호, 닉네임 입력.
     *   API: `POST /api/v1/auth/signup`
 *   **OAuth 콜백 (`/oauth/callback`)**: URL 쿼리 파라미터(`accessToken`, `refreshToken`) 파싱 및 저장.
-*   **온보딩 (`/onboarding`)**: 생년월일/시간 입력 → 사주(오행) 계산 및 프로필 생성.
+*   **온보딩 (`/onboarding`)**: 정밀 사주 계산을 위한 정보 입력 → 사주(오행) 계산 및 프로필 생성.
     *   API: `POST /api/v1/user/onboarding`
+    *   입력 필드 (Phase 2 확장):
+        - `birthDate` (필수): 생년월일 (LocalDate, 예: "2000-01-01")
+        - `birthTime` (선택): 생년월일시 (HH:mm, 예: "13:05", 모르면 null → 서버에서 12:00:00으로 설정)
+        - `gender` (필수): 성별 (MALE/FEMALE/OTHER)
+        - `calendarType` (필수): 양력/음력 구분 (SOLAR/LUNAR/LUNAR_LEAP)
 
 ### 5.2 대시보드 (`/`)
 *   **기능**: 총 자산 요약, 관심 종목 미니 차트, 간단 랭킹, AI 도사 한마디.
@@ -331,5 +341,5 @@ Zustand를 사용하여 전역 상태를 효율적으로 관리하고 컴포넌�
 
 ---
 
-**문서 버전:** 2.7.3 (Spec-Driven Alignment)
+**문서 버전:** 2.7.4 (Spec-Driven Alignment)
 **최종 수정일:** 2026-01-18
