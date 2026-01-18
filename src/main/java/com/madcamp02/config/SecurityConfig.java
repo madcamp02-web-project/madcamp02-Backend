@@ -145,7 +145,7 @@ public class SecurityConfig {
             "/actuator/health",
 
             // ========== WebSocket ==========
-            "/ws/**"
+            "/ws-stomp/**"
     };
     /*
      * 인증 관련 API:

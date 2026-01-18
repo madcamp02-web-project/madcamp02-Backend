@@ -1,6 +1,6 @@
 # 📁 MadCamp02: 최종 통합 명세서
 
-**Ver 2.7.1 - Complete Edition (Spec-Driven Alignment)**
+**Ver 2.7.2 - Complete Edition (Spec-Driven Alignment)**
 
 ---
 
@@ -18,6 +18,7 @@
 | **2.6** | **2026-01-18** | **하이브리드 인증 아키텍처(Frontend/Backend Driven) 반영** | **MadCamp02** |
 | **2.7** | **2026-01-18** | **정합성 기준 고정 및 엔드포인트/용어 문구 정리(라우트/실시간/인증)** | **MadCamp02** |
 | **2.7.1** | **2026-01-18** | **Phase 0: 응답 DTO(최소 필드) 규약/예시 JSON 추가 + STOMP 엔드포인트(`/ws-stomp`) 정합성 고정** | **MadCamp02** |
+| **2.7.2** | **2026-01-18** | **테스트 경로 정규화(src/test/java) 반영 및 CI/CD 단계의 테스트 전략(후속) 명시** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -34,6 +35,11 @@
 
 1.  **응답 DTO 규약 고정(프론트 연동 선행)**: 리스트 응답의 확장성을 위해 `items` 패턴을 채택하고, Market/Portfolio/Inventory/Ranking의 **최소 필드 스키마 + 예시 JSON**을 명시.
 2.  **실시간(STOMP) 엔드포인트 정합성 고정**: 문서 기준 엔드포인트를 `/ws-stomp`로 고정(백엔드 보안 예외/설정은 코드에서 반영).
+
+### Ver 2.7.2 주요 변경 사항
+
+1.  **CI에서 테스트 “실행” 정합성**: 테스트 경로를 표준(`src/test/java`)로 정규화하여 Gradle/CI가 테스트를 탐지할 수 있는 전제를 고정.
+2.  **통합 테스트 전략(후속)**: Postgres/Redis/Flyway 의존 통합 테스트는 CI/CD 단계에서 “서비스 컨테이너 추가” 또는 “테스트 프로파일/컨테이너 전략” 중 하나로 고정(세부는 백엔드 개발 계획서 Phase 8 참조).
 
 ---
 
@@ -519,5 +525,5 @@ MadCamp02는 유연한 연동을 위해 두 가지 인증 흐름을 모두 제�
 
 ---
 
-**문서 버전:** 2.7.1 (Spec-Driven Alignment)
+**문서 버전:** 2.7.2 (Spec-Driven Alignment)
 **최종 수정일:** 2026-01-18
