@@ -1,6 +1,6 @@
 # ⚙️ MadCamp02: 백엔드 개발 계획서
 
-**Ver 2.7.2 - Backend Development Blueprint (Spec-Driven Alignment)**
+**Ver 2.7.3 - Backend Development Blueprint (Spec-Driven Alignment)**
 
 ---
 
@@ -19,6 +19,7 @@
 | **2.7** | **2026-01-18** | **3개 문서 버전 동기화 및 엔드포인트/용어 문구 정리(프론트 연동 기준)** | **MadCamp02** |
 | **2.7.1** | **2026-01-18** | **Phase 0: 응답 DTO(최소 필드) 규약을 FULL_SPEC에 고정 + STOMP(`/ws-stomp`) 설정/보안 예외 고정** | **MadCamp02** |
 | **2.7.2** | **2026-01-18** | **테스트 경로 정규화(src/test/java) + CI에서 “실제 테스트 실행”을 위한 후속(CI/CD) 작업 항목 명시** | **MadCamp02** |
+| **2.7.3** | **2026-01-18** | **Phase 1: `items.category` 레거시→목표 매핑 표 및 Unknown 값 마이그레이션 실패(raise) 정책 고정** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -40,6 +41,10 @@
 
 1.  **테스트 경로 정규화(정석)**: 테스트 소스를 `src/test/java` 표준 경로로 통일하여 Gradle/CI에서 테스트 탐지가 안정적으로 동작하도록 정리.
 2.  **CI/CD 후속 작업 명시**: 통합 테스트를 “항상 통과”시키기 위한 전략(서비스 컨테이너 vs 테스트 프로파일)을 문서화하고 Phase로 분리.
+
+### Ver 2.7.3 주요 변경 사항
+
+1.  **`items.category` 레거시 정합화 정책 고정**: Flyway V3에서의 레거시→목표 매핑 표를 명시하고, Unknown 값 발견 시 마이그레이션을 실패(raise)시키는 Fail Fast 정책을 고정.
 
 ---
 
@@ -322,7 +327,7 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
 ## 12. 향후 실행 계획 (Next Plan)
 
 **정합성 기준(Single Source of Truth)**  
-`docs/FULL_SPECIFICATION.md` + `docs/FRONTEND_DEVELOPMENT_PLAN.md` (둘 다 v2.7) 기준으로, 백엔드 구현을 아래 순서로 진행합니다.
+`docs/FULL_SPECIFICATION.md` + `docs/FRONTEND_DEVELOPMENT_PLAN.md` (둘 다 v2.7.3) 기준으로, 백엔드 구현을 아래 순서로 진행합니다.
 
 ### 12.1 Phase 0: 인터페이스 고정(프론트 연동 선행)
 
@@ -338,6 +343,25 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
 - **Entity 정합화**:
   - `User`에 공개/랭킹참여 필드 및 업데이트 메서드 추가
   - `Item.Category` Enum을 목표 체계로 변경(레거시 매핑 전략 문서화)
+
+#### 12.2.1 `items.category` 레거시→목표 매핑 정책 (Single Source of Truth)
+
+아래 매핑은 **Flyway V3(데이터 마이그레이션)** 및 **백엔드 도메인 Enum**의 단일 진실입니다.
+
+| Legacy Category (V1) | Target Category (Phase 1+) | 비고 |
+|---|---|---|
+| `COSTUME` | `AVATAR` | 아바타 꾸미기 아이템(레거시) |
+| `ACCESSORY` | `AVATAR` | 아바타 꾸미기 아이템(레거시) |
+| `AURA` | `AVATAR` | 아바타 꾸미기 아이템(레거시) |
+| `BACKGROUND` | `THEME` | 화면/배경 계열(레거시) |
+
+> `NAMEPLATE`는 레거시에 직접 대응 값이 없으므로, 신규 데이터부터 `NAMEPLATE`로 생성/저장합니다.
+
+#### 12.2.2 Unknown 처리 정책 (Fail Fast)
+
+- **Flyway V3는 “조용한 통과”를 금지**합니다.
+- 마이그레이션 수행 후 `items.category`에 `NAMEPLATE | AVATAR | THEME` 외 값이 하나라도 남아있으면 **즉시 실패(raise)**하여 배포를 차단합니다.
+- (권장) 마이그레이션에서 `CHECK (category IN ('NAMEPLATE','AVATAR','THEME'))` 제약을 추가해 **재발을 원천 차단**합니다.
 
 ### 12.3 Phase 2: User/Onboarding API (프론트 Phase 1~2 연동 핵심)
 
@@ -409,5 +433,5 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
 
 ---
 
-**문서 버전:** 2.7.2 (Spec-Driven Alignment)  
+**문서 버전:** 2.7.3 (Spec-Driven Alignment)  
 **최종 수정일:** 2026-01-18
