@@ -1,6 +1,6 @@
 # 🎨 MadCamp02: 프론트엔드 개발 계획서
 
-**Ver 2.7.2 - Frontend Development Blueprint (Spec-Driven Alignment)**
+**Ver 2.7.3 - Frontend Development Blueprint (Spec-Driven Alignment)**
 
 ---
 
@@ -16,6 +16,7 @@
 | **2.7** | **2026-01-18** | **문서 기준 정합성(라우팅/스토어/연동) 로드맵 확정 및 엔드포인트/용어 문구 정리** | **MadCamp02** |
 | **2.7.1** | **2026-01-18** | **Phase 0: Response DTO 공통 규약(items 패턴/예시 JSON) 동기화 + STOMP(`/ws-stomp`) 정합성 고정** | **MadCamp02** |
 | **2.7.2** | **2026-01-18** | **백엔드 CI에서 “실제 테스트 실행”이 가능하도록 테스트 경로 정규화 반영(후속 CI/CD 전략은 백엔드 계획서 참고)** | **MadCamp02** |
+| **2.7.3** | **2026-01-18** | **Phase 1: 상점/인벤토리 카테고리 규약(`NAMEPLATE/AVATAR/THEME`) 및 레거시 매핑/Unknown fail 정책(백엔드 Flyway) 명시** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -23,7 +24,7 @@
 
 ### Ver 2.7 주요 변경 사항
 
-1.  **정합성 기준(Single Source of Truth) 고정**: `docs/FULL_SPECIFICATION.md` + 본 문서(Ver 2.7)를 기준으로 **코드를 문서에 맞춰 끌어올리는 전략**을 명시.
+1.  **정합성 기준(Single Source of Truth) 고정**: `docs/FULL_SPECIFICATION.md` + 본 문서(Ver 2.7.3)를 기준으로 **코드를 문서에 맞춰 끌어올리는 전략**을 명시.
 2.  **정합성 우선순위 확정**: (1) 라우트/폴더 단일화 → (2) Hybrid Auth → (3) `lib/api/*.ts` 모듈화 → (4) 페이지 실데이터 치환 → (5) WebSocket/SSE 순으로 단계화.
 3.  **현 코드 불일치 항목을 작업 항목으로 승격**: `/signup`, `/oauth/callback`, `/calculator` 추가 및 `store/` vs `stores/` 단일화 등.
 
@@ -35,6 +36,10 @@
 ### Ver 2.7.2 주요 변경 사항
 
 1.  **CI 품질 게이트(후속) 인지**: 백엔드에서 테스트가 실제 실행되는 구조로 정리됨. CI/CD 전략(서비스 컨테이너 vs 테스트 프로파일)은 `docs/BACKEND_DEVELOPMENT_PLAN.md`의 Phase 8을 단일 진실로 참조.
+
+### Ver 2.7.3 주요 변경 사항
+
+1.  **상점/인벤토리 카테고리 규약 고정**: 프론트에서 사용하는 아이템 카테고리를 `NAMEPLATE | AVATAR | THEME`로 고정하고, 레거시 값은 백엔드 Flyway V3에서 정리되며 Unknown 값은 마이그레이션 실패(raise)로 차단됨을 명시.
 
 ---
 
@@ -228,6 +233,10 @@ src/
     *   API: `POST /api/v1/game/gacha`
 *   **아이템 목록**: 획득 가능한 아이템 리스트 및 확률 정보.
     *   API: `GET /api/v1/game/items`
+*   **카테고리 규약(중요)**:
+    *   프론트에서 사용하는 `category` 값은 **반드시** `NAMEPLATE | AVATAR | THEME`만 허용.
+    *   레거시 값(`COSTUME/ACCESSORY/AURA/BACKGROUND`)은 **백엔드 Flyway V3에서 마이그레이션**하여 목표 체계로 정합화됨.
+    *   Unknown 값이 DB에 남아있으면 **Flyway V3가 실패(raise)하여 배포를 차단**(Fail Fast).
 
 ### 5.7 마이페이지 (`/mypage`) 🆕
 *   **프로필 설정**: 닉네임 변경, 프로필 공개 여부(`is_public`) 토글.
@@ -322,5 +331,5 @@ Zustand를 사용하여 전역 상태를 효율적으로 관리하고 컴포넌�
 
 ---
 
-**문서 버전:** 2.7.2 (Spec-Driven Alignment)
+**문서 버전:** 2.7.3 (Spec-Driven Alignment)
 **최종 수정일:** 2026-01-18
