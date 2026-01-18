@@ -15,6 +15,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -50,6 +51,31 @@ public class User {
     // 🔧 nullable = false 제거
     @Column(name = "birth_date")
     private LocalDate birthDate;
+
+    //------------------------------------------
+    // 정밀 사주 계산 필드 (Phase 2 확장)
+    //------------------------------------------
+    // birth_time: 생년월일시 (TIME 타입)
+    // - 모르면 00:00:00으로 기본값 설정
+    //------------------------------------------
+    @Column(name = "birth_time")
+    private LocalTime birthTime;
+
+    //------------------------------------------
+    // gender: 성별
+    //------------------------------------------
+    // MALE | FEMALE | OTHER
+    //------------------------------------------
+    @Column(name = "gender", length = 10)
+    private String gender;
+
+    //------------------------------------------
+    // calendar_type: 양력/음력 구분
+    //------------------------------------------
+    // SOLAR (양력) | LUNAR (음력) | LUNAR_LEAP (음력윤달)
+    //------------------------------------------
+    @Column(name = "calendar_type", length = 20)
+    private String calendarType;
 
     @Column(name = "saju_element", length = 10)
     private String sajuElement;
@@ -146,7 +172,62 @@ User user = User.builder()
         this.updatedAt = LocalDateTime.now();
     }
 
+    //------------------------------------------
+    // 닉네임만 업데이트
+    //------------------------------------------
+    // PUT /api/v1/user/me 같은 "부분 업데이트"에서
+    // avatarUrl을 건드리지 않고 닉네임만 바꾸고 싶을 때 사용
+    //------------------------------------------
+    public void updateNickname(String nickname) {
+        this.nickname = nickname;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    //------------------------------------------
+    // 아바타 URL만 업데이트
+    //------------------------------------------
+    // profile 이미지/아바타가 바뀌었을 때 URL만 교체하는 용도
+    //------------------------------------------
+    public void updateAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
+        this.updatedAt = LocalDateTime.now();
+    }
+
     public void updateSaju(String sajuElement, String zodiacSign) {
+        this.sajuElement = sajuElement;
+        this.zodiacSign = zodiacSign;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    //------------------------------------------
+    // 온보딩 정보 업데이트 (생년월일)
+    //------------------------------------------
+    // 온보딩에서 사용자가 입력하는 "생년월일"을 저장하는 메서드
+    //
+    //코드리뷰중 발견 --> 필독: 무조건 생년월일에 대한 시간 저장 해야 함!!! 이에 대한 컬럼과 엔티티 확장하기(flyway쓰면 될듯?)
+    //------------------------------------------
+    public void updateBirthDate(LocalDate birthDate) {
+        this.birthDate = birthDate;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    //------------------------------------------
+    // 온보딩 완료 처리 (정밀 사주 계산 결과)
+    //------------------------------------------
+    // 성별/양력음력/시간까지 포함한 정밀 사주 계산 결과 저장
+    //------------------------------------------
+    public void completeOnboarding(
+            LocalDate birthDate,
+            LocalTime birthTime,
+            String gender,
+            String calendarType,
+            String sajuElement,
+            String zodiacSign
+    ) {
+        this.birthDate = birthDate;
+        this.birthTime = birthTime != null ? birthTime : LocalTime.of(0, 0); // 기본값 0시 정각
+        this.gender = gender;
+        this.calendarType = calendarType != null ? calendarType : "SOLAR"; // 기본값 양력
         this.sajuElement = sajuElement;
         this.zodiacSign = zodiacSign;
         this.updatedAt = LocalDateTime.now();
