@@ -146,7 +146,54 @@ User user = User.builder()
         this.updatedAt = LocalDateTime.now();
     }
 
+    //------------------------------------------
+    // 닉네임만 업데이트
+    //------------------------------------------
+    // PUT /api/v1/user/me 같은 "부분 업데이트"에서
+    // avatarUrl을 건드리지 않고 닉네임만 바꾸고 싶을 때 사용
+    //------------------------------------------
+    public void updateNickname(String nickname) {
+        this.nickname = nickname;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    //------------------------------------------
+    // 아바타 URL만 업데이트
+    //------------------------------------------
+    // profile 이미지/아바타가 바뀌었을 때 URL만 교체하는 용도
+    //------------------------------------------
+    public void updateAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
+        this.updatedAt = LocalDateTime.now();
+    }
+
     public void updateSaju(String sajuElement, String zodiacSign) {
+        this.sajuElement = sajuElement;
+        this.zodiacSign = zodiacSign;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    //------------------------------------------
+    // 온보딩 정보 업데이트 (생년월일)
+    //------------------------------------------
+    // 온보딩에서 사용자가 입력하는 "생년월일"을 저장하는 메서드
+    //
+    //코드리뷰중 발견 --> 필독: 무조건 생년월일에 대한 시간 저장 해야 함!!! 이에 대한 컬럼과 엔티티 확장하기(flyway쓰면 될듯?)
+    //------------------------------------------
+    public void updateBirthDate(LocalDate birthDate) {
+        this.birthDate = birthDate;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    //------------------------------------------
+    // 온보딩 완료 처리 (생년월일 + 사주 계산 결과)
+    //------------------------------------------
+    // Phase 2의 POST /api/v1/user/onboarding 에서 사용하는 "원샷" 메서드
+    // - birthDate 저장
+    // - 사주 오행(sajuElement) + 띠(zodiacSign) 저장
+    //------------------------------------------
+    public void completeOnboarding(LocalDate birthDate, String sajuElement, String zodiacSign) {
+        this.birthDate = birthDate;
         this.sajuElement = sajuElement;
         this.zodiacSign = zodiacSign;
         this.updatedAt = LocalDateTime.now();
