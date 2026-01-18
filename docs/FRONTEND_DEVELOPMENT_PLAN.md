@@ -1,6 +1,6 @@
 # 🎨 MadCamp02: 프론트엔드 개발 계획서
 
-**Ver 2.7 - Frontend Development Blueprint (Spec-Driven Alignment)**
+**Ver 2.7.1 - Frontend Development Blueprint (Spec-Driven Alignment)**
 
 ---
 
@@ -14,6 +14,7 @@
 | 2.5 | 2026-01-18 | 통합 명세서(FULL_SPECIFICATION) 및 백엔드 명세와 완전 동기화 | MadCamp02 |
 | **2.6** | **2026-01-18** | **하이브리드 인증(Hybrid Auth) 지원 명시** | **MadCamp02** |
 | **2.7** | **2026-01-18** | **문서 기준 정합성(라우팅/스토어/연동) 로드맵 확정 및 엔드포인트/용어 문구 정리** | **MadCamp02** |
+| **2.7.1** | **2026-01-18** | **Phase 0: Response DTO 공통 규약(items 패턴/예시 JSON) 동기화 + STOMP(`/ws-stomp`) 정합성 고정** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -24,6 +25,11 @@
 1.  **정합성 기준(Single Source of Truth) 고정**: `docs/FULL_SPECIFICATION.md` + 본 문서(Ver 2.7)를 기준으로 **코드를 문서에 맞춰 끌어올리는 전략**을 명시.
 2.  **정합성 우선순위 확정**: (1) 라우트/폴더 단일화 → (2) Hybrid Auth → (3) `lib/api/*.ts` 모듈화 → (4) 페이지 실데이터 치환 → (5) WebSocket/SSE 순으로 단계화.
 3.  **현 코드 불일치 항목을 작업 항목으로 승격**: `/signup`, `/oauth/callback`, `/calculator` 추가 및 `store/` vs `stores/` 단일화 등.
+
+### Ver 2.7.1 주요 변경 사항
+
+1.  **Response DTO 규약 고정**: 리스트 응답은 `{ items: [...] }` 패턴을 사용하고, Market/Portfolio/Inventory/Ranking의 최소 필드를 `docs/FULL_SPECIFICATION.md`(5.0) 기준으로 고정.
+2.  **실시간(STOMP) 정합성 고정**: Endpoint를 `/ws-stomp`로 고정(토픽은 `/topic/*`, 개인 큐는 `/user/queue/*`).
 
 ---
 
@@ -256,6 +262,9 @@ Zustand를 사용하여 전역 상태를 효율적으로 관리하고 컴포넌�
 ## 7. API 및 네트워크 계층
 
 ### 7.1 Axios (REST Client)
+*   **Response DTO 규약(중요)**: `docs/FULL_SPECIFICATION.md`의 `5.0 공통 응답 규약 (Phase 0: Interface Freeze)`를 단일 진실로 사용
+    *   **리스트 응답**: 기본적으로 `{ "items": [...] }` 형태 (향후 `asOf`, `nextCursor` 확장 대비)
+    *   **에러 응답**: `ErrorResponse` (`timestamp/status/error/message`)
 *   **Base URL**: 환경 변수 `NEXT_PUBLIC_API_URL` (예: `http://localhost:8080`)
 *   **Interceptors**:
     *   **Request**: `Authorization` 헤더에 Bearer Token 자동 주입.
@@ -308,5 +317,5 @@ Zustand를 사용하여 전역 상태를 효율적으로 관리하고 컴포넌�
 
 ---
 
-**문서 버전:** 2.7 (Spec-Driven Alignment)
+**문서 버전:** 2.7.1 (Spec-Driven Alignment)
 **최종 수정일:** 2026-01-18
