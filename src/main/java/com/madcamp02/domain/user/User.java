@@ -60,6 +60,12 @@ public class User {
     @Column(name = "avatar_url", columnDefinition = "TEXT")
     private String avatarUrl;
 
+    @Column(name = "is_public", nullable = false)
+    private boolean isPublic = true;
+
+    @Column(name = "is_ranking_joined", nullable = false)
+    private boolean isRankingJoined = true;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -143,6 +149,16 @@ User user = User.builder()
     public void updateSaju(String sajuElement, String zodiacSign) {
         this.sajuElement = sajuElement;
         this.zodiacSign = zodiacSign;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void updateVisibility(boolean isPublic) {
+        this.isPublic = isPublic;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void updateRankingJoined(boolean isRankingJoined) {
+        this.isRankingJoined = isRankingJoined;
         this.updatedAt = LocalDateTime.now();
     }
 

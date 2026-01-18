@@ -1,6 +1,6 @@
 # 📁 MadCamp02: 최종 통합 명세서
 
-**Ver 2.7.2 - Complete Edition (Spec-Driven Alignment)**
+**Ver 2.7.3 - Complete Edition (Spec-Driven Alignment)**
 
 ---
 
@@ -19,6 +19,7 @@
 | **2.7** | **2026-01-18** | **정합성 기준 고정 및 엔드포인트/용어 문구 정리(라우트/실시간/인증)** | **MadCamp02** |
 | **2.7.1** | **2026-01-18** | **Phase 0: 응답 DTO(최소 필드) 규약/예시 JSON 추가 + STOMP 엔드포인트(`/ws-stomp`) 정합성 고정** | **MadCamp02** |
 | **2.7.2** | **2026-01-18** | **테스트 경로 정규화(src/test/java) 반영 및 CI/CD 단계의 테스트 전략(후속) 명시** | **MadCamp02** |
+| **2.7.3** | **2026-01-18** | **Phase 1: `items.category` 레거시→목표 매핑 표 및 Unknown 값 마이그레이션 실패(raise) 정책 고정** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -40,6 +41,10 @@
 
 1.  **CI에서 테스트 “실행” 정합성**: 테스트 경로를 표준(`src/test/java`)로 정규화하여 Gradle/CI가 테스트를 탐지할 수 있는 전제를 고정.
 2.  **통합 테스트 전략(후속)**: Postgres/Redis/Flyway 의존 통합 테스트는 CI/CD 단계에서 “서비스 컨테이너 추가” 또는 “테스트 프로파일/컨테이너 전략” 중 하나로 고정(세부는 백엔드 개발 계획서 Phase 8 참조).
+
+### Ver 2.7.3 주요 변경 사항
+
+1.  **`items.category` 정합성 정책(Fail Fast) 고정**: 레거시→목표 카테고리 매핑 표를 명시하고, Unknown 값이 남아있으면 Flyway V3 마이그레이션을 실패(raise)시켜 배포를 차단.
 
 ---
 
@@ -224,6 +229,22 @@ CREATE TABLE items (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
+
+##### `items.category` 레거시→목표 매핑 정책 (Phase 1 고정)
+
+Flyway V3에서 아래 매핑으로 **기존 데이터(category 문자열)**를 목표 체계로 전환합니다.
+
+| Legacy Category (V1) | Target Category (Phase 1+) | 비고 |
+|---|---|---|
+| `COSTUME` | `AVATAR` | 아바타 꾸미기 아이템(레거시) |
+| `ACCESSORY` | `AVATAR` | 아바타 꾸미기 아이템(레거시) |
+| `AURA` | `AVATAR` | 아바타 꾸미기 아이템(레거시) |
+| `BACKGROUND` | `THEME` | 화면/배경 계열(레거시) |
+
+##### Unknown 처리 정책 (Fail Fast, Phase 1 고정)
+
+- Flyway V3는 마이그레이션 완료 후 `items.category`에 `NAMEPLATE | AVATAR | THEME` 외 값이 남아있으면 **즉시 실패(raise)**해야 합니다.
+- (권장) DB 제약(`CHECK`)을 추가해 이후 잘못된 값이 들어오는 것을 원천 차단합니다.
 
 *(나머지 테이블 `wallet`, `portfolio`, `trade_logs`, `inventory`, `watchlist`, `chat_history`, `notifications`는 Ver 2.4와 동일)*
 
@@ -525,5 +546,5 @@ MadCamp02는 유연한 연동을 위해 두 가지 인증 흐름을 모두 제�
 
 ---
 
-**문서 버전:** 2.7.2 (Spec-Driven Alignment)
+**문서 버전:** 2.7.3 (Spec-Driven Alignment)
 **최종 수정일:** 2026-01-18

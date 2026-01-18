@@ -52,7 +52,7 @@ public class Item {
     // ========== Enum ==========
 
     public enum Category {
-        COSTUME, ACCESSORY, AURA, BACKGROUND
+        NAMEPLATE, AVATAR, THEME
     }
 
     public enum Rarity {
