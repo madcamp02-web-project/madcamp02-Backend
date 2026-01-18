@@ -136,6 +136,10 @@ public class SecurityConfig {
             "/oauth2/**",
             "/login/oauth2/**",
 
+            // ========== Market/Stock API (Phase 3) ==========
+            "/api/v1/market/**", // 시장 데이터 API (인증 불필요)
+            "/api/v1/stock/**", // 주식 데이터 API (인증 불필요)
+
             // ========== API 문서 (Swagger) ==========
             "/swagger-ui/**",
             "/swagger-ui.html",

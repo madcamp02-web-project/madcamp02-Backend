@@ -1,22 +1,24 @@
 # 🎨 MadCamp02: 프론트엔드 개발 계획서
 
-**Ver 2.7.5 - Frontend Development Blueprint (Spec-Driven Alignment)**
+**Ver 2.7.7 - Frontend Development Blueprint (Spec-Driven Alignment)**
 
 ---
 
 ## 📝 변경 이력
 
-| 버전 | 날짜 | 변경 내용 | 작성자 |
-|------|------|----------|--------|
-| 1.0 | 2026-01-15 | 초기 명세서 작성 | MadCamp02 |
-| 1.4 | 2026-01-17 | 구현 상태 1차 분석 | MadCamp02 |
-| 1.5 | 2026-01-18 | 실제 구현 현황(Market, Shop, Trade 등) 반영 | MadCamp02 |
-| 2.5 | 2026-01-18 | 통합 명세서(FULL_SPECIFICATION) 및 백엔드 명세와 완전 동기화 | MadCamp02 |
-| **2.6** | **2026-01-18** | **하이브리드 인증(Hybrid Auth) 지원 명시** | **MadCamp02** |
-| **2.7** | **2026-01-18** | **문서 기준 정합성(라우팅/스토어/연동) 로드맵 확정 및 엔드포인트/용어 문구 정리** | **MadCamp02** |
-| **2.7.1** | **2026-01-18** | **Phase 0: Response DTO 공통 규약(items 패턴/예시 JSON) 동기화 + STOMP(`/ws-stomp`) 정합성 고정** | **MadCamp02** |
-| **2.7.2** | **2026-01-18** | **백엔드 CI에서 “실제 테스트 실행”이 가능하도록 테스트 경로 정규화 반영(후속 CI/CD 전략은 백엔드 계획서 참고)** | **MadCamp02** |
+| 버전      | 날짜           | 변경 내용                                                                                                               | 작성자        |
+| --------- | -------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------- |
+| 1.0       | 2026-01-15     | 초기 명세서 작성                                                                                                        | MadCamp02     |
+| 1.4       | 2026-01-17     | 구현 상태 1차 분석                                                                                                      | MadCamp02     |
+| 1.5       | 2026-01-18     | 실제 구현 현황(Market, Shop, Trade 등) 반영                                                                             | MadCamp02     |
+| 2.5       | 2026-01-18     | 통합 명세서(FULL_SPECIFICATION) 및 백엔드 명세와 완전 동기화                                                            | MadCamp02     |
+| **2.6**   | **2026-01-18** | **하이브리드 인증(Hybrid Auth) 지원 명시**                                                                              | **MadCamp02** |
+| **2.7**   | **2026-01-18** | **문서 기준 정합성(라우팅/스토어/연동) 로드맵 확정 및 엔드포인트/용어 문구 정리**                                       | **MadCamp02** |
+| **2.7.1** | **2026-01-18** | **Phase 0: Response DTO 공통 규약(items 패턴/예시 JSON) 동기화 + STOMP(`/ws-stomp`) 정합성 고정**                       | **MadCamp02** |
+| **2.7.2** | **2026-01-18** | **백엔드 CI에서 “실제 테스트 실행”이 가능하도록 테스트 경로 정규화 반영(후속 CI/CD 전략은 백엔드 계획서 참고)**         | **MadCamp02** |
 | **2.7.3** | **2026-01-18** | **Phase 1: 상점/인벤토리 카테고리 규약(`NAMEPLATE/AVATAR/THEME`) 및 레거시 매핑/Unknown fail 정책(백엔드 Flyway) 명시** | **MadCamp02** |
+| **2.7.6** | **2026-01-19** | **데이터 전략 반영: Historical Data(캔들) API 제한/에러 처리, WebSocket 구독 관리 전략, Quota 초과 시 동작 명시**     | **MadCamp02** |
+| **2.7.7** | **2026-01-19** | **EODHD 무료 구독 제한(최근 1년) 주의사항 추가, 외부 API 확장 대응(Phase 4) 추가** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -51,6 +53,13 @@
 1.  **4주(四柱) 완전 구현**: 백엔드에서 연주/월주/일주/시주 모두 계산하여 정밀 사주 산출. 프론트는 추가 작업 불필요.
 2.  **한국천문연구원 API 연동**: 백엔드에서 자동으로 양력↔음력 변환 처리하므로 프론트는 음력 입력만 전달하면 됨.
 3.  **시간 기본값 변경**: 생년월일시 모를 경우 기본값이 `12:00:00`에서 `00:00:00`으로 변경됨.
+
+### Ver 2.7.6 주요 변경 사항
+
+1.  **데이터 전략 반영**: `docs/DATA_STRATEGY_PLAN.md` 기반으로 Historical Data(캔들) API 제한 및 에러 처리 명시.
+2.  **Historical Data API 동작**: EODHD + DB 캐싱 기반. Quota 초과 시 기존 데이터(Stale) 반환 또는 429 에러 처리.
+3.  **WebSocket 구독 관리**: 백엔드 LRU 기반 동적 구독 관리 전략 명시. 프론트는 페이지 이탈 시 명시적 구독 해제 권장.
+4.  **에러 처리 가이드**: `429 QUOTA_EXCEEDED` 에러 시 사용자 안내 메시지 표시, `X-Data-Status: Stale` 헤더 감지 시 UI 표시.
 
 ---
 
@@ -122,18 +131,18 @@ Next.js App Router 기반의 서버 컴포넌트(RSC)와 클라이언트 컴포�
 
 ## 3. 기술 스택
 
-| 구분 | 기술 | 버전 | 용도 |
-|------|------|------|------|
-| **Core** | Next.js | 16.x | App Router 기반 프레임워크 |
-| **Language** | TypeScript | 5.x | 정적 타입 시스템 |
-| **UI Library** | React | 19.x | 컴포넌트 라이브러리 |
-| **Styling** | Tailwind CSS | 3.4.x | 유틸리티 퍼스트 CSS |
-| **Components** | Shadcn/UI | Latest | 재사용 가능한 UI 컴포넌트 |
-| **State** | Zustand | 5.x | 전역 상태 관리 |
-| **Charts** | Lightweight Charts | 4.x | 고성능 금융 차트 |
-| **Network** | Axios | 1.x | HTTP 클라이언트 |
-| **Real-time** | @stomp/stompjs | 7.x | WebSocket 통신 |
-| **Animations** | Framer Motion | 10.x | UI/UX 애니메이션 |
+| 구분           | 기술               | 버전   | 용도                       |
+| -------------- | ------------------ | ------ | -------------------------- |
+| **Core**       | Next.js            | 16.x   | App Router 기반 프레임워크 |
+| **Language**   | TypeScript         | 5.x    | 정적 타입 시스템           |
+| **UI Library** | React              | 19.x   | 컴포넌트 라이브러리        |
+| **Styling**    | Tailwind CSS       | 3.4.x  | 유틸리티 퍼스트 CSS        |
+| **Components** | Shadcn/UI          | Latest | 재사용 가능한 UI 컴포넌트  |
+| **State**      | Zustand            | 5.x    | 전역 상태 관리             |
+| **Charts**     | Lightweight Charts | 5.x    | 고성능 금융 차트           |
+| **Network**    | Axios              | 1.x    | HTTP 클라이언트            |
+| **Real-time**  | @stomp/stompjs     | 7.x    | WebSocket 통신             |
+| **Animations** | Framer Motion      | 10.x   | UI/UX 애니메이션           |
 
 ---
 
@@ -199,71 +208,86 @@ src/
 
 백엔드는 두 가지 인증 흐름을 모두 지원하므로, 클라이언트 환경에 따라 선택 가능합니다.
 
-*   **로그인 (`/login`)**:
-    *   **Option A (Backend-Driven)**: `GET {BACKEND_URL}/oauth2/authorization/kakao`로 이동 → Callback으로 토큰 수신. (웹 권장)
-    *   **Option B (Frontend-Driven)**: Kakao SDK 로그인 → AccessToken 획득 → `POST /api/v1/auth/oauth/kakao` 호출. (앱/SPA 권장)
-    *   **Email Login**: `POST /api/v1/auth/login` (일반 로그인)
-*   **회원가입 (`/signup`)**: 이메일, 비밀번호, 닉네임 입력.
-    *   API: `POST /api/v1/auth/signup`
-*   **OAuth 콜백 (`/oauth/callback`)**: URL 쿼리 파라미터(`accessToken`, `refreshToken`) 파싱 및 저장.
-*   **온보딩 (`/onboarding`)**: 정밀 사주 계산을 위한 정보 입력 → 사주(오행) 계산 및 프로필 생성.
-    *   API: `POST /api/v1/user/onboarding`
-    *   입력 필드 (Phase 2 확장):
-        - `birthDate` (필수): 생년월일 (LocalDate, 예: "2000-01-01")
-        - `birthTime` (선택): 생년월일시 (HH:mm, 예: "13:05", 모르면 null → 서버에서 00:00:00으로 설정)
-        - `gender` (필수): 성별 (MALE/FEMALE/OTHER)
-        - `calendarType` (필수): 양력/음력 구분 (SOLAR/LUNAR/LUNAR_LEAP)
+- **로그인 (`/login`)**:
+  - **Option A (Backend-Driven)**: `GET {BACKEND_URL}/oauth2/authorization/kakao`로 이동 → Callback으로 토큰 수신. (웹 권장)
+  - **Option B (Frontend-Driven)**: Kakao SDK 로그인 → AccessToken 획득 → `POST /api/v1/auth/oauth/kakao` 호출. (앱/SPA 권장)
+  - **Email Login**: `POST /api/v1/auth/login` (일반 로그인)
+- **회원가입 (`/signup`)**: 이메일, 비밀번호, 닉네임 입력.
+  - API: `POST /api/v1/auth/signup`
+- **OAuth 콜백 (`/oauth/callback`)**: URL 쿼리 파라미터(`accessToken`, `refreshToken`) 파싱 및 저장.
+- **온보딩 (`/onboarding`)**: 정밀 사주 계산을 위한 정보 입력 → 사주(오행) 계산 및 프로필 생성.
+  - API: `POST /api/v1/user/onboarding`
+  - 입력 필드 (Phase 2 확장):
+    - `birthDate` (필수): 생년월일 (LocalDate, 예: "2000-01-01")
+    - `birthTime` (선택): 생년월일시 (HH:mm, 예: "13:05", 모르면 null → 서버에서 00:00:00으로 설정)
+    - `gender` (필수): 성별 (MALE/FEMALE/OTHER)
+    - `calendarType` (필수): 양력/음력 구분 (SOLAR/LUNAR/LUNAR_LEAP)
 
 ### 5.2 대시보드 (`/`)
-*   **기능**: 총 자산 요약, 관심 종목 미니 차트, 간단 랭킹, AI 도사 한마디.
-*   **데이터**: `UserStore`(자산), `StockStore`(관심종목) 연동.
-*   **실시간**: WebSocket으로 관심 종목 현재가 갱신.
+
+- **기능**: 총 자산 요약, 관심 종목 미니 차트, 간단 랭킹, AI 도사 한마디.
+- **데이터**: `UserStore`(자산), `StockStore`(관심종목) 연동.
+- **실시간**: WebSocket으로 관심 종목 현재가 갱신.
 
 ### 5.3 시장 (`/market`) 🆕
-*   **지수**: KOSPI, KOSDAQ, NASDAQ, S&P500 등 주요 지수 카드.
-    *   API: `GET /api/v1/market/indices`
-*   **뉴스**: 최신 경제/증권 뉴스 리스트 (썸네일 포함).
-    *   API: `GET /api/v1/market/news`
-*   **시장 주도주 (Movers)**: 급등/급락/거래량 상위 Top 5.
-    *   API: `GET /api/v1/market/movers`
+
+- **지수**: KOSPI, KOSDAQ, NASDAQ, S&P500 등 주요 지수 카드.
+  - API: `GET /api/v1/market/indices`
+- **뉴스**: 최신 경제/증권 뉴스 리스트 (썸네일 포함).
+  - API: `GET /api/v1/market/news`
+- **시장 주도주 (Movers)**: 급등/급락/거래량 상위 Top 5.
+  - API: `GET /api/v1/market/movers`
 
 ### 5.4 거래 (`/trade`) 🆕
-*   **주식 검색**: 심볼/종목명 검색 및 선택.
-    *   API: `GET /api/v1/stock/search`
-*   **차트**: TradingView 스타일 캔들 차트 (Lightweight Charts).
-    *   API: `GET /api/v1/stock/candles/{ticker}`
-*   **호가창 (Orderbook)**: 매수/매도 10단계 호가 및 잔량 표시.
-    *   API: `GET /api/v1/stock/orderbook/{ticker}` (초기 로딩) + WebSocket 업데이트.
-*   **주문 패널**: 매수/매도 탭, 수량/가격 입력, 주문 전송.
-    *   API: `POST /api/v1/trade/order`
+
+- **주식 검색**: 심볼/종목명 검색 및 선택.
+  - API: `GET /api/v1/stock/search`
+- **차트**: TradingView 스타일 캔들 차트 (Lightweight Charts).
+  - API: `GET /api/v1/stock/candles/{ticker}`
+  - **데이터 전략**: EODHD + DB 캐싱 기반. Quota 초과 시 기존 데이터(Stale) 반환 또는 429 에러 처리.
+  - **⚠️ 주의사항**:
+    - **무료 구독 제한**: EODHD 무료 플랜은 **최근 1년 데이터만 제공**. 1년 이전 날짜 범위 요청 시 경고 메시지만 반환될 수 있음.
+    - **날짜 범위 제한**: 프론트엔드에서 날짜 선택 시 최근 1년 이내로 제한하는 UI 가이드 표시 권장.
+  - **에러 처리**: 
+    - `429 QUOTA_EXCEEDED`: 일일 외부 API 호출 한도 초과. 사용자에게 "데이터 갱신 중입니다. 잠시 후 다시 시도해주세요." 안내.
+    - `X-Data-Status: Stale` 헤더 또는 `warning` 필드: 최신 데이터가 아니지만 차트는 표시 가능.
+    - 응답에 `warning` 필드가 포함된 경우: "데이터 제공 범위 제한" 안내 메시지 표시.
+- **호가창 (Orderbook)**: 매수/매도 10단계 호가 및 잔량 표시.
+  - API: `GET /api/v1/stock/orderbook/{ticker}` (초기 로딩) + WebSocket 업데이트.
+- **주문 패널**: 매수/매도 탭, 수량/가격 입력, 주문 전송.
+  - API: `POST /api/v1/trade/order`
 
 ### 5.5 포트폴리오 (`/portfolio`) 🆕
-*   **보유 현황**: 종목별 평단가, 현재가, 수익률, 비중 테이블.
-    *   API: `GET /api/v1/trade/portfolio`
-*   **자산 분석**: 섹터별/자산별 파이 차트.
-*   **거래 내역**: 기간별 매수/매도 이력 조회.
-    *   API: `GET /api/v1/trade/history`
+
+- **보유 현황**: 종목별 평단가, 현재가, 수익률, 비중 테이블.
+  - API: `GET /api/v1/trade/portfolio`
+- **자산 분석**: 섹터별/자산별 파이 차트.
+- **거래 내역**: 기간별 매수/매도 이력 조회.
+  - API: `GET /api/v1/trade/history`
 
 ### 5.6 상점 (`/shop`) 🆕
-*   **가챠 머신**: 코인을 소모하여 아이템(칭호, 아바타, 테마) 뽑기 애니메이션.
-    *   API: `POST /api/v1/game/gacha`
-*   **아이템 목록**: 획득 가능한 아이템 리스트 및 확률 정보.
-    *   API: `GET /api/v1/game/items`
-*   **카테고리 규약(중요)**:
-    *   프론트에서 사용하는 `category` 값은 **반드시** `NAMEPLATE | AVATAR | THEME`만 허용.
-    *   레거시 값(`COSTUME/ACCESSORY/AURA/BACKGROUND`)은 **백엔드 Flyway V3에서 마이그레이션**하여 목표 체계로 정합화됨.
-    *   Unknown 값이 DB에 남아있으면 **Flyway V3가 실패(raise)하여 배포를 차단**(Fail Fast).
+
+- **가챠 머신**: 코인을 소모하여 아이템(칭호, 아바타, 테마) 뽑기 애니메이션.
+  - API: `POST /api/v1/game/gacha`
+- **아이템 목록**: 획득 가능한 아이템 리스트 및 확률 정보.
+  - API: `GET /api/v1/game/items`
+- **카테고리 규약(중요)**:
+  - 프론트에서 사용하는 `category` 값은 **반드시** `NAMEPLATE | AVATAR | THEME`만 허용.
+  - 레거시 값(`COSTUME/ACCESSORY/AURA/BACKGROUND`)은 **백엔드 Flyway V3에서 마이그레이션**하여 목표 체계로 정합화됨.
+  - Unknown 값이 DB에 남아있으면 **Flyway V3가 실패(raise)하여 배포를 차단**(Fail Fast).
 
 ### 5.7 마이페이지 (`/mypage`) 🆕
-*   **프로필 설정**: 닉네임 변경, 프로필 공개 여부(`is_public`) 토글.
-    *   API: `PUT /api/v1/user/me`
-*   **인벤토리**: 획득한 아이템 조회 및 장착/해제.
-    *   API: `GET /api/v1/game/inventory`, `PUT /api/v1/game/equip/{itemId}`
+
+- **프로필 설정**: 닉네임 변경, 프로필 공개 여부(`is_public`) 토글.
+  - API: `PUT /api/v1/user/me`
+- **인벤토리**: 획득한 아이템 조회 및 장착/해제.
+  - API: `GET /api/v1/game/inventory`, `PUT /api/v1/game/equip/{itemId}`
 
 ### 5.8 AI 도사 (`/oracle`) 🆕
-*   **채팅 UI**: 사용자와 AI 간 대화창.
-*   **스트리밍 답변**: SSE를 통해 실시간으로 답변 생성되는 과정 표시.
-    *   API: `POST /chat/ask` (FastAPI 연동)
+
+- **채팅 UI**: 사용자와 AI 간 대화창.
+- **스트리밍 답변**: SSE를 통해 실시간으로 답변 생성되는 과정 표시.
+  - API: `POST /api/v1/chat/ask` (백엔드 프록시, SSE 스트리밍)
 
 ---
 
@@ -272,80 +296,109 @@ src/
 Zustand를 사용하여 전역 상태를 효율적으로 관리하고 컴포넌트 간 결합도를 낮춥니다.
 
 ### 6.1 `auth-store.ts`
-*   **State**: `user` (기본 정보), `accessToken`, `isAuthenticated`, `isLoading`
-*   **Actions**: `login`, `logout`, `updateToken`, `checkAuth`
+
+- **State**: `user` (기본 정보), `accessToken`, `isAuthenticated`, `isLoading`
+- **Actions**: `login`, `logout`, `updateToken`, `checkAuth`
 
 ### 6.2 `user-store.ts`
-*   **State**: `wallet` (예수금, 코인), `portfolio` (보유 종목 리스트), `inventory` (아이템)
-*   **Actions**: `fetchWallet`, `fetchPortfolio`, `updateBalance` (실시간 반영)
+
+- **State**: `wallet` (예수금, 코인), `portfolio` (보유 종목 리스트), `inventory` (아이템)
+- **Actions**: `fetchWallet`, `fetchPortfolio`, `updateBalance` (실시간 반영)
 
 ### 6.3 `stock-store.ts`
-*   **State**: `currentTicker` (현재 보고 있는 종목), `prices` (Map<Ticker, Price>), `watchlist`
-*   **Actions**: `setTicker`, `updatePrice` (WebSocket 수신 시), `toggleWatchlist`
+
+- **State**: `currentTicker` (현재 보고 있는 종목), `prices` (Map<Ticker, Price>), `watchlist`
+- **Actions**: `setTicker`, `updatePrice` (WebSocket 수신 시), `toggleWatchlist`
 
 ### 6.4 `ui-store.ts`
-*   **State**: `isSidebarOpen`, `activeModal`, `theme` (Dark/Light), `toastMessage`
-*   **Actions**: `toggleSidebar`, `openModal`, `showToast`
+
+- **State**: `isSidebarOpen`, `activeModal`, `theme` (Dark/Light), `toastMessage`
+- **Actions**: `toggleSidebar`, `openModal`, `showToast`
 
 ---
 
 ## 7. API 및 네트워크 계층
 
 ### 7.1 Axios (REST Client)
-*   **Response DTO 규약(중요)**: `docs/FULL_SPECIFICATION.md`의 `5.0 공통 응답 규약 (Phase 0: Interface Freeze)`를 단일 진실로 사용
-    *   **리스트 응답**: 기본적으로 `{ "items": [...] }` 형태 (향후 `asOf`, `nextCursor` 확장 대비)
-    *   **에러 응답**: `ErrorResponse` (`timestamp/status/error/message`)
-*   **Base URL**: 환경 변수 `NEXT_PUBLIC_API_URL` (예: `http://localhost:8080`)
-*   **Interceptors**:
-    *   **Request**: `Authorization` 헤더에 Bearer Token 자동 주입.
-    *   **Response**: 401 Unauthorized 발생 시 토큰 갱신 시도 또는 로그아웃 처리.
+
+- **Response DTO 규약(중요)**: `docs/FULL_SPECIFICATION.md`의 `5.0 공통 응답 규약 (Phase 0: Interface Freeze)`를 단일 진실로 사용
+  - **리스트 응답**: 기본적으로 `{ "items": [...] }` 형태 (향후 `asOf`, `nextCursor` 확장 대비)
+  - **에러 응답**: `ErrorResponse` (`timestamp/status/error/message`)
+- **Base URL**: 환경 변수 `NEXT_PUBLIC_API_URL` (예: `http://localhost:8080`)
+- **Interceptors**:
+  - **Request**: `Authorization` 헤더에 Bearer Token 자동 주입.
+  - **Response**: 401 Unauthorized 발생 시 토큰 갱신 시도 또는 로그아웃 처리.
 
 ### 7.2 WebSocket (STOMP)
-*   **Endpoint**: `/ws-stomp`
-*   **Subscriptions**:
-    *   `/topic/stock.indices`: 지수 업데이트 (전역)
-    *   `/topic/stock.ticker.{ticker}`: 특정 종목 호가/현재가 (Trade 페이지 진입 시)
-    *   `/user/queue/trade`: 내 주문 체결 알림 (전역)
+
+- **Endpoint**: `/ws-stomp`
+- **Subscriptions**:
+  - `/topic/stock.indices`: 지수 업데이트 (전역)
+  - `/topic/stock.ticker.{ticker}`: 특정 종목 호가/현재가 (Trade 페이지 진입 시)
+  - `/user/queue/trade`: 내 주문 체결 알림 (전역)
+- **구독 관리 전략**:
+  - **동적 구독**: 사용자가 종목 상세 페이지(`/trade`) 진입 시에만 해당 종목 구독.
+  - **LRU 기반 해제**: 백엔드에서 Finnhub WebSocket 50 Symbols 제한으로 인해, 현재 아무도 보고 있지 않은 종목은 자동으로 구독 해제됨.
+  - **프론트엔드 동작**: 페이지 이탈 시 명시적 구독 해제(`UNSUBSCRIBE`) 권장. 백엔드가 자동 관리하지만, 네트워크 리소스 절약을 위해 클라이언트도 협력.
 
 ### 7.3 Server-Sent Events (SSE)
-*   **Endpoint**: `POST /chat/ask` (AI 서버 직접 호출 또는 백엔드 프록시)
-*   **Format**: JSON 데이터 스트림 (`event: message`, `data: {...}`)
-*   **Parsing**: 스트림을 청크 단위로 받아 채팅 말풍선에 실시간 타이핑 효과 구현.
+
+- **Endpoint**: `POST /chat/ask` (AI 서버 직접 호출 또는 백엔드 프록시)
+- **Format**: JSON 데이터 스트림 (`event: message`, `data: {...}`)
+- **Parsing**: 스트림을 청크 단위로 받아 채팅 말풍선에 실시간 타이핑 효과 구현.
 
 ---
 
 ## 8. 개발 로드맵
 
 ### 🔴 Phase 1: 기반 구축 (진행 중)
-*   [x] 프로젝트 구조 설정 및 공통 UI 컴포넌트 구현
-*   [x] 주요 페이지(UI) 퍼블리싱 (Dashboard, Market, Trade 등)
-*   [ ] **정합성 1차 정리(라우트/폴더/스토어 단일화)** - *Priority Critical*
-    *   `/signup`, `/oauth/callback`, `/calculator` 라우트 추가
-    *   `src/store/` vs `src/stores/` 단일화 및 중복 `ui-store` 정리
-    *   `/dashboard`, `/gacha`는 유지/정리(리다이렉트 포함) 중 택1로 문서/코드 동기화
-*   [ ] **회원가입/로그인 및 Hybrid OAuth Callback 구현** - *Priority Critical*
-    *   Backend-Driven Redirect + `/oauth/callback` 파싱/저장/리다이렉트
-    *   (선택) Frontend-Driven Token API 연동
-*   [ ] **API 클라이언트 모듈화 (`lib/api/*.ts`) + 401 처리(Refresh/Retry)** - *Priority High*
+
+- [x] 프로젝트 구조 설정 및 공통 UI 컴포넌트 구현
+- [x] 주요 페이지(UI) 퍼블리싱 (Dashboard, Market, Trade 등)
+- [ ] **정합성 1차 정리(라우트/폴더/스토어 단일화)** - _Priority Critical_
+  - `/signup`, `/oauth/callback`, `/calculator` 라우트 추가
+  - `src/store/` vs `src/stores/` 단일화 및 중복 `ui-store` 정리
+  - `/dashboard`, `/gacha`는 유지/정리(리다이렉트 포함) 중 택1로 문서/코드 동기화
+- [ ] **회원가입/로그인 및 Hybrid OAuth Callback 구현** - _Priority Critical_
+  - Backend-Driven Redirect + `/oauth/callback` 파싱/저장/리다이렉트
+  - (선택) Frontend-Driven Token API 연동
+- [ ] **API 클라이언트 모듈화 (`lib/api/*.ts`) + 401 처리(Refresh/Retry)** - _Priority High_
 
 ### 🟡 Phase 2: 기능 연동 (예정)
-*   [ ] 페이지별 실데이터 치환(현 Mock → API)
-    *   `/market`: indices/news/movers
-    *   `/trade`: search/candles/orderbook + 주문
-    *   `/portfolio`: portfolio/history
-    *   `/shop`: items/gacha/inventory/equip
-    *   `/ranking`: ranking
-    *   `/mypage`: user/me 업데이트 + 공개/랭킹참여 토글
-*   [ ] 스토어(`stores/*`)를 API 응답 타입에 맞게 재정의 및 전역 동기화
+
+- [ ] 페이지별 실데이터 치환(현 Mock → API)
+  - `/market`: indices/news/movers
+  - `/trade`: search/candles/orderbook + 주문
+  - `/portfolio`: portfolio/history
+  - `/shop`: items/gacha/inventory/equip
+  - `/ranking`: ranking
+  - `/mypage`: user/me 업데이트 + 공개/랭킹참여 토글
+- [ ] 스토어(`stores/*`)를 API 응답 타입에 맞게 재정의 및 전역 동기화
 
 ### 🟢 Phase 3: 실시간 & 최적화 (예정)
-*   [ ] WebSocket(STOMP) 연결 및 실시간 주가/체결 반영 (문서 토픽 기준)
-    *   Endpoint/Topic 정합성: `/ws-stomp`, `/topic/*`, `/user/queue/*`
-*   [ ] AI 도사 SSE 채팅 구현 (`/chat/ask`) 및 스트리밍 파싱
-    *   `/oracle` 페이지와 `ChatbotPopup`의 Oracle 클라이언트를 단일화
-*   [ ] 모바일 반응형 디테일 수정 및 UX 폴리싱
+
+- [ ] WebSocket(STOMP) 연결 및 실시간 주가/체결 반영 (문서 토픽 기준)
+  - Endpoint/Topic 정합성: `/ws-stomp`, `/topic/*`, `/user/queue/*`
+  - 동적 구독 관리: 페이지 진입 시 구독, 이탈 시 해제 (백엔드 LRU 전략과 협력)
+- [ ] Historical Data (캔들) API 에러 처리 구현
+  - `429 QUOTA_EXCEEDED` 에러 시 사용자 안내 메시지 표시
+  - `X-Data-Status: Stale` 또는 `warning` 필드 감지 시 UI에 "최신 데이터 아님" 표시
+  - 날짜 범위 선택 UI에 "최근 1년 데이터만 제공" 안내 추가
+- [ ] AI 도사 SSE 채팅 구현 (`/api/v1/chat/ask`) 및 스트리밍 파싱
+  - `/oracle` 페이지와 `ChatbotPopup`의 Oracle 클라이언트를 단일화
+- [ ] 모바일 반응형 디테일 수정 및 UX 폴리싱
+
+### 🔵 Phase 4: 외부 API 확장 대응 (향후 개선)
+
+백엔드에서 다중 API Provider 전략을 도입할 경우, 프론트엔드는 추가 작업 없이 기존 API를 그대로 사용할 수 있습니다. 다만, 향후 개선 사항으로 다음을 고려할 수 있습니다:
+
+- [ ] **Provider 상태 표시 (선택)**: 여러 Provider를 사용하는 경우, 데이터 출처를 UI에 표시 (예: "데이터 제공: EODHD", "데이터 제공: Alpha Vantage")
+- [ ] **데이터 완성도 표시**: 여러 Provider에서 병합된 데이터의 경우, 데이터 완성도(커버리지)를 시각적으로 표시
+- [ ] **Fallback 상태 안내**: Primary Provider 실패 시 Secondary Provider로 전환된 경우, 사용자에게 안내 메시지 표시
+
+**참고**: Phase 4는 백엔드의 Phase 9(외부 API 확장 전략) 구현 후에만 필요한 작업입니다.
 
 ---
 
-**문서 버전:** 2.7.5 (Spec-Driven Alignment)
-**최종 수정일:** 2026-01-18
+**문서 버전:** 2.7.7 (API 제한 및 확장 전략 반영)
+**최종 수정일:** 2026-01-19

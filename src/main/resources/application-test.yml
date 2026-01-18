@@ -1,0 +1,52 @@
+# ============================================
+# MadCamp02 Backend - 테스트 환경 설정
+# ============================================
+# 통합 테스트를 위한 최소 설정
+# DB/Redis 연결이 필요하지만, Mock을 사용하여 외부 의존성 최소화
+
+spring:
+  # 테스트용 데이터베이스 (실제 연결 필요 시 docker-compose 사용)
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:madcamp02-backend}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+
+  # JPA 설정
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false  # 테스트에서는 SQL 로그 최소화
+
+  # Redis 설정 (실제 연결 필요 시 docker-compose 사용)
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+  # Flyway 설정
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+# ============================================
+# 테스트용 JWT 설정
+# ============================================
+jwt:
+  secret: test-secret-key-for-testing-minimum-32-characters-long
+  access-expiration: 3600000
+  refresh-expiration: 604800000
+
+# ============================================
+# 테스트용 외부 API (Mock 사용)
+# ============================================
+finnhub:
+  api-key: test_api_key
+
+# EODHD API 설정 (테스트에서는 Mock 사용 가능)
+eodhd:
+  api-key: ${EODHD_API_KEY:test_api_key}
+
+# 한국천문연구원 음력 변환 API 설정
+kasi:
+  service-key: ${KASI_SERVICE_KEY:test_service_key}

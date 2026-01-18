@@ -125,6 +125,11 @@ finnhub:
 kasi:
   service-key: ${KASI_SERVICE_KEY:}
 
+# EODHD API 설정 (Historical Data)
+# https://eodhd.com/ 에서 무료 API 키 발급
+eodhd:
+  api-key: ${EODHD_API_KEY:}
+
 # AI 서버 설정
 ai:
   server:
