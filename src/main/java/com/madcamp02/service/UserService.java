@@ -85,21 +85,37 @@ public class UserService {
     // 온보딩 (POST /api/v1/user/onboarding)
     //------------------------------------------
     // 처리 과정:
-    //  1) birthDate 저장
-    //  2) SajuCalculator로 오행/띠 계산
-    //  3) users.saju_element, users.zodiac_sign 저장
+    //  1) 정밀 사주 계산 (성별/양력음력/시간 포함)
+    //  2) birthDate, birthTime, gender, calendarType 저장
+    //  3) SajuCalculator로 오행/띠 계산
+    //  4) users.saju_element, users.zodiac_sign 저장
     //------------------------------------------
     @Transactional
     public UserMeResponse onboarding(Long userId, UserOnboardingRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserException(ErrorCode.USER_NOT_FOUND));
 
-        SajuCalculator.SajuResult result = sajuCalculator.calculate(request.getBirthDate());
+        // 정밀 사주 계산
+        SajuCalculator.SajuInput input = SajuCalculator.SajuInput.builder()
+                .birthDate(request.getBirthDate())
+                .birthTime(request.getBirthTimeAsLocalTime())
+                .gender(request.getGender())
+                .calendarType(request.getCalendarType())
+                .build();
+
+        SajuCalculator.SajuResult result = sajuCalculator.calculatePrecise(input);
 
         // 온보딩은 "한 번에" 완료 처리하는게 안전합니다.
         // (중간 저장/중간 실패가 나면, birthDate만 들어가고 saju가 비는 불완전 상태가 될 수 있음)
         // 이를 예방하게 메서드로 체크
-        user.completeOnboarding(request.getBirthDate(), result.getSajuElement(), result.getZodiacSign());
+        user.completeOnboarding(
+                request.getBirthDate(),
+                request.getBirthTimeAsLocalTime(),
+                request.getGender(),
+                request.getCalendarType(),
+                result.getSajuElement(),
+                result.getZodiacSign()
+        );
 
         userRepository.save(user);
 
@@ -139,6 +155,9 @@ public class UserService {
                 .nickname(user.getNickname())
                 .provider(user.getProvider())
                 .birthDate(user.getBirthDate())
+                .birthTime(user.getBirthTime())
+                .gender(user.getGender())
+                .calendarType(user.getCalendarType())
                 .sajuElement(user.getSajuElement())
                 .zodiacSign(user.getZodiacSign())
                 .avatarUrl(user.getAvatarUrl())

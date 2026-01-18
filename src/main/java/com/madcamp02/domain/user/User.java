@@ -15,6 +15,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -50,6 +51,31 @@ public class User {
     // 🔧 nullable = false 제거
     @Column(name = "birth_date")
     private LocalDate birthDate;
+
+    //------------------------------------------
+    // 정밀 사주 계산 필드 (Phase 2 확장)
+    //------------------------------------------
+    // birth_time: 생년월일시 (TIME 타입)
+    // - 모르면 00:00:00으로 기본값 설정
+    //------------------------------------------
+    @Column(name = "birth_time")
+    private LocalTime birthTime;
+
+    //------------------------------------------
+    // gender: 성별
+    //------------------------------------------
+    // MALE | FEMALE | OTHER
+    //------------------------------------------
+    @Column(name = "gender", length = 10)
+    private String gender;
+
+    //------------------------------------------
+    // calendar_type: 양력/음력 구분
+    //------------------------------------------
+    // SOLAR (양력) | LUNAR (음력) | LUNAR_LEAP (음력윤달)
+    //------------------------------------------
+    @Column(name = "calendar_type", length = 20)
+    private String calendarType;
 
     @Column(name = "saju_element", length = 10)
     private String sajuElement;
@@ -186,14 +212,22 @@ User user = User.builder()
     }
 
     //------------------------------------------
-    // 온보딩 완료 처리 (생년월일 + 사주 계산 결과)
+    // 온보딩 완료 처리 (정밀 사주 계산 결과)
     //------------------------------------------
-    // Phase 2의 POST /api/v1/user/onboarding 에서 사용하는 "원샷" 메서드
-    // - birthDate 저장
-    // - 사주 오행(sajuElement) + 띠(zodiacSign) 저장
+    // 성별/양력음력/시간까지 포함한 정밀 사주 계산 결과 저장
     //------------------------------------------
-    public void completeOnboarding(LocalDate birthDate, String sajuElement, String zodiacSign) {
+    public void completeOnboarding(
+            LocalDate birthDate,
+            LocalTime birthTime,
+            String gender,
+            String calendarType,
+            String sajuElement,
+            String zodiacSign
+    ) {
         this.birthDate = birthDate;
+        this.birthTime = birthTime != null ? birthTime : LocalTime.of(12, 0); // 기본값 12시 정각
+        this.gender = gender;
+        this.calendarType = calendarType != null ? calendarType : "SOLAR"; // 기본값 양력
         this.sajuElement = sajuElement;
         this.zodiacSign = zodiacSign;
         this.updatedAt = LocalDateTime.now();
