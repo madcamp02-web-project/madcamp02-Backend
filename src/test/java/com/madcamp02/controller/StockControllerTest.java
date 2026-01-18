@@ -1,10 +1,13 @@
 package com.madcamp02.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.madcamp02.domain.stock.StockCandleRepository;
 import com.madcamp02.dto.response.StockCandlesResponse;
 import com.madcamp02.dto.response.StockQuoteResponse;
 import com.madcamp02.dto.response.StockSearchResponse;
+import com.madcamp02.external.EodhdClient;
 import com.madcamp02.external.FinnhubClient;
+import com.madcamp02.service.QuotaManager;
 import com.madcamp02.service.StockService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -32,7 +35,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @WebMvcTest(controllers = StockController.class,
         excludeAutoConfiguration = {
-                org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration.class
+                org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration.class,
+                org.springframework.boot.autoconfigure.cache.CacheAutoConfiguration.class
         })
 @DisplayName("Stock API 테스트")
 class StockControllerTest {
@@ -46,8 +50,18 @@ class StockControllerTest {
     @MockBean
     private StockService stockService;
 
+    // StockService의 의존성들 (실제로는 StockService를 Mock하므로 필요 없지만, Spring Context 로딩을 위해 선언)
     @MockBean
     private FinnhubClient finnhubClient;
+
+    @MockBean
+    private EodhdClient eodhdClient;
+
+    @MockBean
+    private StockCandleRepository stockCandleRepository;
+
+    @MockBean
+    private QuotaManager quotaManager;
 
     private StockSearchResponse mockSearchResponse;
     private StockQuoteResponse mockQuoteResponse;

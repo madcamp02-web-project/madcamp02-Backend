@@ -1,8 +1,10 @@
 package com.madcamp02.service;
 
+import com.madcamp02.domain.stock.StockCandleRepository;
 import com.madcamp02.dto.response.StockCandlesResponse;
 import com.madcamp02.dto.response.StockQuoteResponse;
 import com.madcamp02.dto.response.StockSearchResponse;
+import com.madcamp02.external.EodhdClient;
 import com.madcamp02.external.FinnhubClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -14,8 +16,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 /**
@@ -31,6 +35,15 @@ class StockServiceTest {
 
     @Mock
     private FinnhubClient finnhubClient;
+
+    @Mock
+    private EodhdClient eodhdClient;
+
+    @Mock
+    private StockCandleRepository stockCandleRepository;
+
+    @Mock
+    private QuotaManager quotaManager;
 
     @InjectMocks
     private StockService stockService;
@@ -109,7 +122,7 @@ class StockServiceTest {
     }
 
     @Test
-    @DisplayName("getCandles - Premium API 제한으로 빈 응답 반환")
+    @DisplayName("getCandles - DB에 데이터 없고 Quota 초과로 빈 응답 반환")
     void testGetCandles() {
         // Given
         String ticker = "AAPL";
@@ -117,10 +130,17 @@ class StockServiceTest {
         LocalDateTime from = LocalDateTime.of(2026, 1, 1, 0, 0);
         LocalDateTime to = LocalDateTime.of(2026, 1, 18, 0, 0);
 
+        // DB에 데이터 없음
+        when(stockCandleRepository.findAllBySymbolAndDateBetweenOrderByDateAsc(any(), any(), any()))
+                .thenReturn(Collections.emptyList());
+        
+        // Quota 초과
+        when(quotaManager.checkQuota("EODHD")).thenReturn(false);
+
         // When
         StockCandlesResponse response = stockService.getCandles(ticker, resolution, from, to);
 
-        // Then - Premium API이므로 빈 응답 반환
+        // Then - DB에 데이터 없고 Quota 초과이므로 빈 응답 반환
         assertThat(response).isNotNull();
         assertThat(response.getTicker()).isEqualTo("AAPL");
         assertThat(response.getResolution()).isEqualTo("D");
