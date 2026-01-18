@@ -134,3 +134,5 @@
 | `docs/FRONTEND_DEVELOPMENT_PLAN.md` | 프론트엔드 개발 계획서 |
 | `요약.md` | 검증 결과 요약 |
 | `ai_log.md` | 대화 로그 (현재 파일) |
+
+
