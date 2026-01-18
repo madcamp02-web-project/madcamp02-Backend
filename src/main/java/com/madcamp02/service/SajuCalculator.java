@@ -3,11 +3,11 @@ package com.madcamp02.service;
 //======================================
 // SajuCalculator - 정밀 사주(오행/띠) 계산기
 //======================================
-// Phase 2 확장: 성별/양력음력/시간까지 포함한 정밀 사주 계산
+// 성별/양력음력/시간까지 포함한 정밀 사주 계산
 //
 // 입력:
 // - birthDate: 생년월일 (양력 또는 음력)
-// - birthTime: 생년월일시 (모르면 12:00:00)
+// - birthTime: 생년월일시 (모르면 00:00:00)
 // - gender: 성별 (MALE/FEMALE/OTHER)
 // - calendarType: 양력/음력 구분 (SOLAR/LUNAR/LUNAR_LEAP)
 //
@@ -23,15 +23,22 @@ package com.madcamp02.service;
 // - 최종 오행은 일주(日柱)의 천간을 기준으로 산출
 //======================================
 
+import com.madcamp02.external.LunarCalendarClient;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
 
+@Slf4j
 @Component
+@RequiredArgsConstructor
 public class SajuCalculator {
+
+    private final LunarCalendarClient lunarCalendarClient;
 
     //------------------------------------------
     // 반환 타입: SajuResult
@@ -94,15 +101,30 @@ public class SajuCalculator {
     private static final int BASE_YEAR = 1984;
 
     //------------------------------------------
-    // 월주/시주 계산용 매핑 (향후 확장 예정)
+    // 월주 계산용: 월(지지) -> 천간 오프셋
     //------------------------------------------
-    // 현재는 연주/일주만 계산하지만, 향후 월주/시주 계산 시 사용 예정
+    // 각 월의 지지에 대응하는 천간 인덱스 오프셋
+    // 1월(인월)부터 12월(축월)까지
     //------------------------------------------
+    private static final int[] MONTH_STEM_OFFSET = {
+            2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3  // 1월~12월
+    };
 
     //------------------------------------------
-    // 정밀 사주 계산 (Phase 2 확장)
+    // 시주 계산용: 시간(지지) -> 천간 오프셋
+    //------------------------------------------
+    // 각 시간대의 지지에 대응하는 천간 인덱스 오프셋
+    // 자시(23-1)부터 해시(21-23)까지
+    //------------------------------------------
+    private static final int[] HOUR_STEM_OFFSET = {
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1  // 자시(23-1) ~ 해시(21-23)
+    };
+
+    //------------------------------------------
+    // 정밀 사주 계산
     //------------------------------------------
     // 성별/양력음력/시간까지 포함한 정밀 계산
+    // 연주/월주/일주/시주 모두 계산하여 최종 오행 도출
     //------------------------------------------
     public SajuResult calculatePrecise(SajuInput input) {
         if (input.getBirthDate() == null) {
@@ -113,12 +135,32 @@ public class SajuCalculator {
         LocalDate solarDate = convertToSolar(input.getBirthDate(), input.getCalendarType());
 
         // 2) 연주(年柱) 계산 (띠는 연주 지지 기준)
+        int yearStemIndex = calculateYearStem(solarDate.getYear());
         int yearBranchIndex = calculateYearBranch(solarDate.getYear());
         String zodiac = BRANCH_TO_ZODIAC[yearBranchIndex];
 
-        // 3) 일주(日柱) 계산 (오행은 일주의 천간 기준)
+        // 3) 월주(月柱) 계산
+        int monthStemIndex = calculateMonthStem(solarDate, yearStemIndex);
+        int monthBranchIndex = calculateMonthBranch(solarDate);
+
+        // 4) 일주(日柱) 계산 (오행은 일주의 천간 기준)
         int dayStemIndex = calculateDayStem(solarDate);
+        int dayBranchIndex = calculateDayBranch(solarDate);
+
+        // 5) 시주(時柱) 계산
+        LocalTime birthTime = input.getBirthTime() != null ? input.getBirthTime() : LocalTime.of(0, 0);
+        int hourStemIndex = calculateHourStem(birthTime, dayStemIndex);
+        int hourBranchIndex = calculateHourBranch(birthTime);
+
+        // 최종 오행은 일주(日柱)의 천간을 기준으로 산출
         String element = STEM_TO_ELEMENT[dayStemIndex];
+
+        log.debug("사주 계산 결과 - 연주: {}{}, 월주: {}{}, 일주: {}{}, 시주: {}{}, 오행: {}, 띠: {}",
+                yearStemIndex, yearBranchIndex,
+                monthStemIndex, monthBranchIndex,
+                dayStemIndex, dayBranchIndex,
+                hourStemIndex, hourBranchIndex,
+                element, zodiac);
 
         return SajuResult.builder()
                 .sajuElement(element)
@@ -127,34 +169,25 @@ public class SajuCalculator {
     }
 
     //------------------------------------------
-    // 레거시 호환: 기존 calculate 메서드
-    //------------------------------------------
-    // 기존 코드 호환성을 위해 유지 (내부적으로 정밀 계산 호출)
-    //------------------------------------------
-    public SajuResult calculate(LocalDate birthDate) {
-        SajuInput input = SajuInput.builder()
-                .birthDate(birthDate)
-                .birthTime(LocalTime.of(12, 0))
-                .gender("OTHER")
-                .calendarType("SOLAR")
-                .build();
-        return calculatePrecise(input);
-    }
-
-    //------------------------------------------
     // 양력 변환 (음력 -> 양력)
     //------------------------------------------
-    // 주의: 정밀한 음력 변환은 외부 라이브러리 필요
-    // 현재는 간단한 근사치로 처리 (실제로는 한국천문연구원 API 등 사용 권장)
+    // 한국천문연구원 API를 사용하여 음력을 양력으로 변환
     //------------------------------------------
     private LocalDate convertToSolar(LocalDate inputDate, String calendarType) {
         if ("SOLAR".equals(calendarType)) {
             return inputDate; // 이미 양력
         }
-        // 음력/음력윤달의 경우, 실제로는 복잡한 변환 로직 필요
-        // Phase 2에서는 일단 입력값을 그대로 사용 (향후 정밀 변환 라이브러리 도입)
-        // TODO: 음력 변환 라이브러리 통합 (예: KoreanLunarCalendar)
-        return inputDate;
+
+        // 음력/음력윤달의 경우 한국천문연구원 API 호출
+        boolean isLeapMonth = "LUNAR_LEAP".equals(calendarType);
+        LunarCalendarClient.SolarDateResult result = lunarCalendarClient.convertLunarToSolar(
+                inputDate.getYear(),
+                inputDate.getMonthValue(),
+                inputDate.getDayOfMonth(),
+                isLeapMonth
+        );
+
+        return result.getSolarDate();
     }
 
     //------------------------------------------
@@ -174,6 +207,28 @@ public class SajuCalculator {
     }
 
     //------------------------------------------
+    // 월주 천간 계산
+    //------------------------------------------
+    // 연주 천간과 월의 지지 오프셋을 조합하여 계산
+    //------------------------------------------
+    private int calculateMonthStem(LocalDate date, int yearStemIndex) {
+        int month = date.getMonthValue();
+        int offset = MONTH_STEM_OFFSET[month - 1];
+        return mod(yearStemIndex + offset, 10);
+    }
+
+    //------------------------------------------
+    // 월주 지지 계산
+    //------------------------------------------
+    // 월(1월=인월, 2월=묘월, ...)에 대응하는 지지 인덱스
+    //------------------------------------------
+    private int calculateMonthBranch(LocalDate date) {
+        int month = date.getMonthValue();
+        // 1월=인(2), 2월=묘(3), 3월=진(4), ... 12월=축(11)
+        return mod(month + 1, 12);
+    }
+
+    //------------------------------------------
     // 일주 천간 계산
     //------------------------------------------
     // 1900-01-01을 기준으로 일수 차이를 계산하여 천간 도출
@@ -184,6 +239,57 @@ public class SajuCalculator {
         // 1900-01-01은 경진(庚辰)으로 알려져 있음 (천간=6)
         int baseStem = 6;
         return mod((int) daysDiff + baseStem, 10);
+    }
+
+    //------------------------------------------
+    // 일주 지지 계산
+    //------------------------------------------
+    // 1900-01-01을 기준으로 일수 차이를 계산하여 지지 도출
+    //------------------------------------------
+    private int calculateDayBranch(LocalDate date) {
+        LocalDate baseDate = LocalDate.of(1900, 1, 1);
+        long daysDiff = java.time.temporal.ChronoUnit.DAYS.between(baseDate, date);
+        // 1900-01-01은 경진(庚辰)으로 알려져 있음 (지지=4)
+        int baseBranch = 4;
+        return mod((int) daysDiff + baseBranch, 12);
+    }
+
+    //------------------------------------------
+    // 시주 천간 계산
+    //------------------------------------------
+    // 일주 천간과 시간의 지지 오프셋을 조합하여 계산
+    //------------------------------------------
+    private int calculateHourStem(LocalTime time, int dayStemIndex) {
+        int hourIndex = getHourIndex(time);
+        int offset = HOUR_STEM_OFFSET[hourIndex];
+        return mod(dayStemIndex * 2 + offset, 10);
+    }
+
+    //------------------------------------------
+    // 시주 지지 계산
+    //------------------------------------------
+    // 시간대에 대응하는 지지 인덱스
+    //------------------------------------------
+    private int calculateHourBranch(LocalTime time) {
+        int hourIndex = getHourIndex(time);
+        return hourIndex;
+    }
+
+    //------------------------------------------
+    // 시간대 인덱스 계산
+    //------------------------------------------
+    // 자시(23-1) = 0, 축시(1-3) = 1, ..., 해시(21-23) = 11
+    //------------------------------------------
+    private int getHourIndex(LocalTime time) {
+        int hour = time.getHour();
+        // 자시(23-1): hour=23 or 0 -> index=0
+        // 축시(1-3): hour=1 or 2 -> index=1
+        // ...
+        // 해시(21-23): hour=21 or 22 -> index=11
+        if (hour == 23 || hour == 0) {
+            return 0; // 자시
+        }
+        return (hour + 1) / 2;
     }
 
     //------------------------------------------

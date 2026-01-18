@@ -1,6 +1,6 @@
 # 🎨 MadCamp02: 프론트엔드 개발 계획서
 
-**Ver 2.7.3 - Frontend Development Blueprint (Spec-Driven Alignment)**
+**Ver 2.7.5 - Frontend Development Blueprint (Spec-Driven Alignment)**
 
 ---
 
@@ -45,6 +45,12 @@
 
 1.  **온보딩 UI 확장**: Phase 2에서 정밀 사주 계산을 위해 성별(`gender`: MALE/FEMALE/OTHER), 양력/음력 구분(`calendarType`: SOLAR/LUNAR/LUNAR_LEAP), 생년월일시(`birthTime`: HH:mm, 선택, 기본값 12:00) 입력 필드를 추가해야 함.
 2.  **온보딩 요청 DTO 확장**: `POST /api/v1/user/onboarding` 요청 Body에 `gender`, `calendarType`, `birthTime` 필드 추가 (기존 `birthDate`는 유지).
+
+### Ver 2.7.5 주요 변경 사항
+
+1.  **4주(四柱) 완전 구현**: 백엔드에서 연주/월주/일주/시주 모두 계산하여 정밀 사주 산출. 프론트는 추가 작업 불필요.
+2.  **한국천문연구원 API 연동**: 백엔드에서 자동으로 양력↔음력 변환 처리하므로 프론트는 음력 입력만 전달하면 됨.
+3.  **시간 기본값 변경**: 생년월일시 모를 경우 기본값이 `12:00:00`에서 `00:00:00`으로 변경됨.
 
 ---
 
@@ -204,7 +210,7 @@ src/
     *   API: `POST /api/v1/user/onboarding`
     *   입력 필드 (Phase 2 확장):
         - `birthDate` (필수): 생년월일 (LocalDate, 예: "2000-01-01")
-        - `birthTime` (선택): 생년월일시 (HH:mm, 예: "13:05", 모르면 null → 서버에서 12:00:00으로 설정)
+        - `birthTime` (선택): 생년월일시 (HH:mm, 예: "13:05", 모르면 null → 서버에서 00:00:00으로 설정)
         - `gender` (필수): 성별 (MALE/FEMALE/OTHER)
         - `calendarType` (필수): 양력/음력 구분 (SOLAR/LUNAR/LUNAR_LEAP)
 
@@ -341,5 +347,5 @@ Zustand를 사용하여 전역 상태를 효율적으로 관리하고 컴포넌�
 
 ---
 
-**문서 버전:** 2.7.4 (Spec-Driven Alignment)
+**문서 버전:** 2.7.5 (Spec-Driven Alignment)
 **최종 수정일:** 2026-01-18

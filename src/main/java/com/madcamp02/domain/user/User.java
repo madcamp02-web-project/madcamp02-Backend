@@ -225,7 +225,7 @@ User user = User.builder()
             String zodiacSign
     ) {
         this.birthDate = birthDate;
-        this.birthTime = birthTime != null ? birthTime : LocalTime.of(12, 0); // 기본값 12시 정각
+        this.birthTime = birthTime != null ? birthTime : LocalTime.of(0, 0); // 기본값 0시 정각
         this.gender = gender;
         this.calendarType = calendarType != null ? calendarType : "SOLAR"; // 기본값 양력
         this.sajuElement = sajuElement;

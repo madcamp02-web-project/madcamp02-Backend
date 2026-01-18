@@ -1,6 +1,6 @@
 # ⚙️ MadCamp02: 백엔드 개발 계획서
 
-**Ver 2.7.3 - Backend Development Blueprint (Spec-Driven Alignment)**
+**Ver 2.7.5 - Backend Development Blueprint (Spec-Driven Alignment)**
 
 ---
 
@@ -20,6 +20,8 @@
 | **2.7.1** | **2026-01-18** | **Phase 0: 응답 DTO(최소 필드) 규약을 FULL_SPEC에 고정 + STOMP(`/ws-stomp`) 설정/보안 예외 고정** | **MadCamp02** |
 | **2.7.2** | **2026-01-18** | **테스트 경로 정규화(src/test/java) + CI에서 “실제 테스트 실행”을 위한 후속(CI/CD) 작업 항목 명시** | **MadCamp02** |
 | **2.7.3** | **2026-01-18** | **Phase 1: `items.category` 레거시→목표 매핑 표 및 Unknown 값 마이그레이션 실패(raise) 정책 고정** | **MadCamp02** |
+| **2.7.4** | **2026-01-18** | **Phase 2 확장: 정밀 사주 계산(성별/양력음력/시간 포함) 및 타인 프로필 공개 API DTO 분리** | **MadCamp02** |
+| **2.7.5** | **2026-01-18** | **Phase 2 완성: 월주/시주 계산 구현, 한국천문연구원 API 연동(양력↔음력 변환), 레거시 호환 제거** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -51,6 +53,13 @@
 1.  **정밀 사주 계산 확장**: Phase 2에서 성별(`gender`), 양력/음력 구분(`calendar_type`), 생년월일시(`birth_time`)까지 포함한 정밀 사주 계산으로 확장. Flyway V4로 `users` 테이블에 `birth_time`(TIME), `gender`(VARCHAR), `calendar_type`(VARCHAR) 컬럼 추가.
 2.  **타인 프로필 공개 API DTO 분리**: `UserMeResponse`(내 정보, email 포함)와 `UserPublicResponse`(타인 정보, email 제외)를 분리하여 보안 강화.
 3.  **SajuCalculator 정밀 계산 확장**: `calculatePrecise()` 메서드 추가로 연주/월주/일주/시주까지 포함한 정밀 사주 계산 지원.
+
+### Ver 2.7.5 주요 변경 사항
+
+1.  **월주/시주 계산 완전 구현**: 연주/월주/일주/시주 4주(四柱) 모두 계산하여 정밀 사주 산출. 최종 오행은 일주(日柱)의 천간을 기준으로 도출.
+2.  **한국천문연구원 API 연동**: 공공데이터포털의 "한국천문연구원_음양력 정보" API를 통합하여 양력↔음력 정확한 변환 지원. `LunarCalendarClient` 구현.
+3.  **레거시 호환 제거**: 서비스 시작 전 단계이므로 레거시 데이터가 없어 기존 `calculate(LocalDate)` 메서드 제거. 모든 계산은 `calculatePrecise()`로 통일.
+4.  **시간 기본값 변경**: 생년월일시 모를 경우 기본값을 `12:00:00`에서 `00:00:00`으로 변경.
 
 ---
 
@@ -309,15 +318,15 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
 4.  결과 DTO 반환
 
 ### 10.2 사주 분석 로직 (`SajuCalculator`)
-1.  정밀 사주 계산 (Phase 2 확장):
+1.  정밀 사주 계산 (4주 완전 구현):
     - 입력: 생년월일(양력/음력), 생년월일시, 성별
-    - 연주(年柱): 연도 기준 천간/지지
-    - 월주(月柱): 월 기준 천간/지지
-    - 일주(日柱): 일 기준 천간/지지 (오행은 일주 천간 기준)
-    - 시주(時柱): 시간 기준 천간/지지
-2.  오행(Wood, Fire, Earth, Metal, Water) 도출
+    - 연주(年柱): 연도 기준 천간/지지 (띠는 연주 지지 기준)
+    - 월주(月柱): 월 기준 천간/지지 (연주 천간과 월 지지 오프셋 조합)
+    - 일주(日柱): 일 기준 천간/지지 (1900-01-01 기준 일수 차이 계산, **오행은 일주 천간 기준**)
+    - 시주(時柱): 시간 기준 천간/지지 (일주 천간과 시간 지지 오프셋 조합)
+2.  오행(Wood, Fire, Earth, Metal, Water) 도출: 일주(日柱)의 천간을 기준으로 산출
 3.  오행별 투자 성향 매핑 (DB 또는 Enum 관리)
-4.  음력 변환: 향후 외부 라이브러리 통합 예정 (현재는 양력 기준)
+4.  음력 변환: 한국천문연구원 API(`LunarCalendarClient`)를 통한 정확한 양력↔음력 변환
 
 ---
 
@@ -384,12 +393,15 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
   - `POST /api/v1/user/onboarding` (정밀 사주 계산: 성별/양력음력/시간 포함)
   - `GET /api/v1/user/wallet`
 - **DB 스키마 확장 (Flyway V4)**:
-  - `users.birth_time` (TIME): 생년월일시 (기본값 12:00:00)
+  - `users.birth_time` (TIME): 생년월일시 (기본값 00:00:00)
   - `users.gender` (VARCHAR): 성별 (MALE/FEMALE/OTHER)
   - `users.calendar_type` (VARCHAR): 양력/음력 구분 (SOLAR/LUNAR/LUNAR_LEAP)
-- **정밀 사주 계산**:
-  - `SajuCalculator.calculatePrecise()`: 연주/월주/일주/시주까지 포함한 정밀 계산
-  - 음력 변환은 향후 외부 라이브러리 통합 예정 (현재는 양력 기준)
+- **정밀 사주 계산 (4주 완전 구현)**:
+  - `SajuCalculator.calculatePrecise()`: 연주/월주/일주/시주 4주 모두 계산
+  - 최종 오행은 일주(日柱)의 천간을 기준으로 산출
+- **한국천문연구원 API 연동**:
+  - `LunarCalendarClient`: 공공데이터포털 API를 통한 양력↔음력 정확한 변환
+  - 환경변수 `KASI_SERVICE_KEY` 필요 (공공데이터포털에서 발급)
 - **타인 프로필 공개 API (향후)**:
   - `GET /api/v1/user/{userId}` (`UserPublicResponse`, email 제외)
 
@@ -454,5 +466,5 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
 
 ---
 
-**문서 버전:** 2.7.4 (Spec-Driven Alignment)  
+**문서 버전:** 2.7.5 (Spec-Driven Alignment)  
 **최종 수정일:** 2026-01-18
