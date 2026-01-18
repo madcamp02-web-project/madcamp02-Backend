@@ -145,6 +145,7 @@ public class SecurityConfig {
             "/actuator/health",
 
             // ========== WebSocket ==========
+            //여기 WebSocketConfig 만들면서 문서에서 ws에서 ws-stomp으로 엔드포인트 변경하고자 함
             "/ws-stomp/**"
     };
     /*
