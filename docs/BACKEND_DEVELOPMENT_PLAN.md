@@ -1,6 +1,6 @@
 # ⚙️ MadCamp02: 백엔드 개발 계획서
 
-**Ver 2.7.1 - Backend Development Blueprint (Spec-Driven Alignment)**
+**Ver 2.7.2 - Backend Development Blueprint (Spec-Driven Alignment)**
 
 ---
 
@@ -18,6 +18,7 @@
 | **2.6** | **2026-01-18** | **하이브리드 인증 방식(Frontend/Backend Driven) 명세 반영 및 구현 현황 점검** | **MadCamp02** |
 | **2.7** | **2026-01-18** | **3개 문서 버전 동기화 및 엔드포인트/용어 문구 정리(프론트 연동 기준)** | **MadCamp02** |
 | **2.7.1** | **2026-01-18** | **Phase 0: 응답 DTO(최소 필드) 규약을 FULL_SPEC에 고정 + STOMP(`/ws-stomp`) 설정/보안 예외 고정** | **MadCamp02** |
+| **2.7.2** | **2026-01-18** | **테스트 경로 정규화(src/test/java) + CI에서 “실제 테스트 실행”을 위한 후속(CI/CD) 작업 항목 명시** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -34,6 +35,11 @@
 
 1.  **응답 DTO 스키마 고정**: 프론트 연동을 위해 Market/Portfolio/Inventory/Ranking의 “최소 필드”를 `docs/FULL_SPECIFICATION.md`의 **5.0 공통 응답 규약**으로 고정.
 2.  **STOMP 엔드포인트 고정**: 문서/코드 정합성 기준으로 `/ws-stomp`를 고정하고, 보안 예외도 동일하게 정렬.
+
+### Ver 2.7.2 주요 변경 사항
+
+1.  **테스트 경로 정규화(정석)**: 테스트 소스를 `src/test/java` 표준 경로로 통일하여 Gradle/CI에서 테스트 탐지가 안정적으로 동작하도록 정리.
+2.  **CI/CD 후속 작업 명시**: 통합 테스트를 “항상 통과”시키기 위한 전략(서비스 컨테이너 vs 테스트 프로파일)을 문서화하고 Phase로 분리.
 
 ---
 
@@ -387,7 +393,21 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
 - **구현 대상**: `ChatController`(SSE), `ChatHistory` 저장, AI 서버 프록시/클라이언트
 - **엔드포인트**: `POST /api/v1/chat/ask` (SSE 스트리밍)
 
+### 12.9 Phase 8: CI/CD + 테스트 전략 (후속, 품질 게이트 고정)
+
+현재 CI의 `Build Test`는 `./gradlew clean build`를 수행하므로, **테스트가 실제로 실행**됩니다.  
+다만 `@SpringBootTest` 기반 통합 테스트는 Postgres/Redis/Flyway 등 외부 인프라 의존이 있어, CI에서 “항상 통과”시키려면 아래 중 하나를 선택해 고정해야 합니다.
+
+- **Option A (Service 붙이기 / CI 친화)**: GitHub Actions 워크플로우에 Postgres/Redis 서비스를 추가하고, 테스트에서 해당 서비스로 연결
+  - 장점: 운영과 가장 유사한 환경에서 검증
+  - 단점: CI 시간 증가, 컨테이너 초기화/헬스체크 관리 필요
+- **Option B (테스트 프로파일/내장 대체 / 빠른 피드백)**: `application-test.yml`로 H2/embedded 또는 Testcontainers 기반 프로파일을 도입해 외부 의존 없이 테스트 실행
+  - 장점: 빠르고 안정적, 로컬/CI 일관성 높음
+  - 단점: 운영(Postgres/Redis)과 차이가 생길 수 있어 일부 통합 버그를 놓칠 수 있음
+
+> 위 2가지는 “CI/CD 구성 단계”에서 선택/고정하고, 선택 결과를 `docs`에 반영하여 팀 합의(단일 진실)로 유지합니다.
+
 ---
 
-**문서 버전:** 2.7.1 (Spec-Driven Alignment)  
+**문서 버전:** 2.7.2 (Spec-Driven Alignment)  
 **최종 수정일:** 2026-01-18

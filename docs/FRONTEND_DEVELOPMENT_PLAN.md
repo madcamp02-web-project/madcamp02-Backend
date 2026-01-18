@@ -1,6 +1,6 @@
 # 🎨 MadCamp02: 프론트엔드 개발 계획서
 
-**Ver 2.7.1 - Frontend Development Blueprint (Spec-Driven Alignment)**
+**Ver 2.7.2 - Frontend Development Blueprint (Spec-Driven Alignment)**
 
 ---
 
@@ -15,6 +15,7 @@
 | **2.6** | **2026-01-18** | **하이브리드 인증(Hybrid Auth) 지원 명시** | **MadCamp02** |
 | **2.7** | **2026-01-18** | **문서 기준 정합성(라우팅/스토어/연동) 로드맵 확정 및 엔드포인트/용어 문구 정리** | **MadCamp02** |
 | **2.7.1** | **2026-01-18** | **Phase 0: Response DTO 공통 규약(items 패턴/예시 JSON) 동기화 + STOMP(`/ws-stomp`) 정합성 고정** | **MadCamp02** |
+| **2.7.2** | **2026-01-18** | **백엔드 CI에서 “실제 테스트 실행”이 가능하도록 테스트 경로 정규화 반영(후속 CI/CD 전략은 백엔드 계획서 참고)** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -30,6 +31,10 @@
 
 1.  **Response DTO 규약 고정**: 리스트 응답은 `{ items: [...] }` 패턴을 사용하고, Market/Portfolio/Inventory/Ranking의 최소 필드를 `docs/FULL_SPECIFICATION.md`(5.0) 기준으로 고정.
 2.  **실시간(STOMP) 정합성 고정**: Endpoint를 `/ws-stomp`로 고정(토픽은 `/topic/*`, 개인 큐는 `/user/queue/*`).
+
+### Ver 2.7.2 주요 변경 사항
+
+1.  **CI 품질 게이트(후속) 인지**: 백엔드에서 테스트가 실제 실행되는 구조로 정리됨. CI/CD 전략(서비스 컨테이너 vs 테스트 프로파일)은 `docs/BACKEND_DEVELOPMENT_PLAN.md`의 Phase 8을 단일 진실로 참조.
 
 ---
 
@@ -317,5 +322,5 @@ Zustand를 사용하여 전역 상태를 효율적으로 관리하고 컴포넌�
 
 ---
 
-**문서 버전:** 2.7.1 (Spec-Driven Alignment)
+**문서 버전:** 2.7.2 (Spec-Driven Alignment)
 **최종 수정일:** 2026-01-18
