@@ -64,6 +64,14 @@ logging:
 finnhub:
   api-key: ${FINNHUB_API_KEY}
 
+# EODHD API 설정 (Historical Data)
+eodhd:
+  api-key: ${EODHD_API_KEY:}
+
+# 한국천문연구원 음력 변환 API 설정
+kasi:
+  service-key: ${KASI_SERVICE_KEY:}
+
 ai:
   server:
     url: ${AI_SERVER_URL}

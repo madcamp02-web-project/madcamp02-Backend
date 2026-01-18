@@ -42,3 +42,11 @@ jwt:
 # ============================================
 finnhub:
   api-key: test_api_key
+
+# EODHD API 설정 (테스트에서는 Mock 사용 가능)
+eodhd:
+  api-key: ${EODHD_API_KEY:test_api_key}
+
+# 한국천문연구원 음력 변환 API 설정
+kasi:
+  service-key: ${KASI_SERVICE_KEY:test_service_key}
