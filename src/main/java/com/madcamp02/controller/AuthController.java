@@ -297,15 +297,24 @@ public class AuthController {
     @Operation(summary = "현재 사용자 정보", description = "로그인된 사용자 정보 조회")
     @GetMapping("/me") // GET /me 요청 처리
     public ResponseEntity<AuthResponse> me(@AuthenticationPrincipal CustomUserDetails userDetails) {
-        // 서비스(DB)를 거치지 않고, 토큰에서 해석된 정보(userDetails)를 바로 가공해서 반환
-        // 애초에 지금 현재 정보의 경우 token에 가공되어서 base64로 인코딩 된 상태니까
-        // 토큰 정보를 이용하면 DB select문 안해도 되잖아
+        // userDetails는 JwtAuthenticationFilter -> JwtTokenProvider -> CustomUserDetailsService를 통해
+        // DB에서 User 엔티티를 읽어온 뒤(CustomUserDetails로 감싼 뒤) 컨트롤러로 들어온 결과물
+        //
+        // 즉, "추가 DB 조회"를 하지 않아도 userDetails 안에는 이미 최신(조회 시점 기준)의
+        // 프로필 정보(사주/아바타 등)가 들어가 있게 됨
 
-        // DB 조회를 아끼는 효율적인 방식(중요)
+        // isNewUser의 의미:
+        // - 프론트가 온보딩 화면을 띄울지 말지 결정하는 플래그
+        // - 일단 지금 Phase 2 개발하고 있는데 "사주 계산이 아직 안 됨(sajuElement == null)"이면 온보딩 미완료로 보게 됨
+        boolean isNewUser = (userDetails.getUser().getSajuElement() == null);
+
         return ResponseEntity.ok(AuthResponse.builder()
                 .userId(userDetails.getUserId())
                 .email(userDetails.getEmail())
                 .nickname(userDetails.getNickname())
+                .sajuElement(userDetails.getUser().getSajuElement())
+                .avatarUrl(userDetails.getUser().getAvatarUrl())
+                .isNewUser(isNewUser)
                 .build());
     }
 }

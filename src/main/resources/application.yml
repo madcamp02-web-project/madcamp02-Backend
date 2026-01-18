@@ -120,6 +120,11 @@ finnhub:
   base-url: https://finnhub.io/api/v1
   websocket-url: wss://ws.finnhub.io
 
+# 한국천문연구원 음력 변환 API 설정
+# https://www.data.go.kr/data/15012679/openapi.do(직접 찾은 사이트)
+kasi:
+  service-key: ${KASI_SERVICE_KEY:}
+
 # AI 서버 설정
 ai:
   server:
