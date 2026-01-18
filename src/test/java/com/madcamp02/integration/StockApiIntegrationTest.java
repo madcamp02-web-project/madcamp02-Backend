@@ -15,6 +15,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -36,8 +40,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @WebMvcTest(controllers = StockController.class,
         excludeAutoConfiguration = {
-                org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration.class
-        })
+                org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration.class,
+                org.springframework.boot.autoconfigure.cache.CacheAutoConfiguration.class,
+                org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration.class
+        },
+        excludeFilters = @ComponentScan.Filter(
+                type = FilterType.ASSIGNABLE_TYPE,
+                classes = com.madcamp02.config.CacheConfig.class
+        ))
+@TestPropertySource(properties = {
+        "spring.cache.type=none"
+})
 @DisplayName("Stock API 통합 테스트")
 class StockApiIntegrationTest {
 
@@ -62,6 +75,12 @@ class StockApiIntegrationTest {
 
     @MockBean
     private QuotaManager quotaManager;
+
+    @MockBean
+    private RedisConnectionFactory redisConnectionFactory;
+
+    @MockBean
+    private org.springframework.web.client.RestTemplate restTemplate;
 
     @Test
     @DisplayName("GET /api/v1/stock/search - 실제 API 호출 검증")

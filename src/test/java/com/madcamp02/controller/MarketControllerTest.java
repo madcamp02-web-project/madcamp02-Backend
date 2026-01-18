@@ -12,6 +12,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Arrays;
@@ -30,8 +34,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(controllers = MarketController.class,
         excludeAutoConfiguration = {
                 org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration.class,
-                org.springframework.boot.autoconfigure.cache.CacheAutoConfiguration.class
-        })
+                org.springframework.boot.autoconfigure.cache.CacheAutoConfiguration.class,
+                org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration.class
+        },
+        excludeFilters = @ComponentScan.Filter(
+                type = FilterType.ASSIGNABLE_TYPE,
+                classes = com.madcamp02.config.CacheConfig.class
+        ))
+@TestPropertySource(properties = {
+        "spring.cache.type=none"
+})
 @DisplayName("Market API 테스트")
 class MarketControllerTest {
 
@@ -46,6 +58,12 @@ class MarketControllerTest {
 
     @MockBean
     private FinnhubClient finnhubClient;
+
+    @MockBean
+    private RedisConnectionFactory redisConnectionFactory;
+
+    @MockBean
+    private org.springframework.web.client.RestTemplate restTemplate;
 
     private MarketIndicesResponse mockIndicesResponse;
     private MarketNewsResponse mockNewsResponse;
