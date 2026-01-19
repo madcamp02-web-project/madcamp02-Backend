@@ -56,8 +56,14 @@ dependencies {
 	// API Documentation (Swagger/OpenAPI)
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.0'
 
+	// Kotlin reflection (springdoc-openapi 2.8.0에서 필수 의존성)
+	implementation 'org.jetbrains.kotlin:kotlin-reflect:1.9.25'
+
 	// Actuator (Health Check, Metrics)
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+	// OkHttp WebSocket Client (Finnhub WebSocket 연결용)
+	implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 }
 
 tasks.named('test') {

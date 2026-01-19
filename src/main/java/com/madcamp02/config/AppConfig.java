@@ -16,6 +16,7 @@ package com.madcamp02.config;
 //   - 싱글톤으로 관리되어 메모리 효율적
 //======================================
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestTemplate;
@@ -45,5 +46,18 @@ public class AppConfig {
     @Bean
     public RestTemplate restTemplate() {
         return new RestTemplate();
+    }
+
+    /**
+     * ObjectMapper Bean 등록
+     * 
+     * Jackson ObjectMapper를 명시적으로 등록하여
+     * TradePriceBroadcastService 등에서 주입받아 사용
+     * 
+     * @return ObjectMapper 인스턴스
+     */
+    @Bean
+    public ObjectMapper objectMapper() {
+        return new ObjectMapper();
     }
 }

@@ -1,6 +1,6 @@
 # 🎨 MadCamp02: 프론트엔드 개발 계획서
 
-**Ver 2.7.8 - Frontend Development Blueprint (Spec-Driven Alignment)**
+**Ver 2.7.12 - Frontend Development Blueprint (Spec-Driven Alignment)**
 
 ---
 
@@ -21,6 +21,9 @@
 | **2.7.7** | **2026-01-19** | **EODHD 무료 구독 제한(최근 1년) 주의사항 추가, 외부 API 확장 대응(Phase 4) 추가** | **MadCamp02** |
 | **2.7.8** | **2026-01-19** | **지수 조회를 ETF로 변경 (Finnhub Quote API는 지수 심볼 미지원) - SPY, QQQ, DIA 사용** | **MadCamp02** |
 | **2.7.9** | **2026-01-19** | **Phase 4: Trade/Portfolio Engine 완전 구현 및 문서 통합 (트랜잭션/락 전략, 다이어그램 포함)** | **MadCamp02** |
+| **2.7.10** | **2026-01-19** | **Phase 5 백엔드 구현 완료 연동 안내(Shop/Gacha/Inventory/Ranking)** | **MadCamp02** |
+| **2.7.11** | **2026-01-19** | **프론트 2.7.11 스냅샷 + Phase 5 완료 기반 “Phase 5.5: 프론트 연동·DB 제약 보강” 체크리스트 고정(Shop/Gacha/Inventory/Ranking 실데이터 전환, `{items:[]}`·카테고리/ETF/STOMP 정합성 재확인)** | **MadCamp02** |
+| **2.7.12** | **2026-01-19** | **백엔드 Phase 4~6 구현 기준 Trade/Portfolio/Game/Realtime(WebSocket) DTO·에러 처리·토픽/endpoint 문구를 FULL_SPEC 및 BACKEND 계획서와 정합하게 보정** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -28,7 +31,7 @@
 
 ### Ver 2.7 주요 변경 사항
 
-1.  **정합성 기준(Single Source of Truth) 고정**: `docs/FULL_SPECIFICATION.md` + 본 문서(Ver 2.7.3)를 기준으로 **코드를 문서에 맞춰 끌어올리는 전략**을 명시.
+1.  **정합성 기준(Single Source of Truth) 고정**: `docs/FULL_SPECIFICATION.md` + 본 문서(Ver 2.7.11)를 기준으로 **코드를 문서에 맞춰 끌어올리는 전략**을 명시.
 2.  **정합성 우선순위 확정**: (1) 라우트/폴더 단일화 → (2) Hybrid Auth → (3) `lib/api/*.ts` 모듈화 → (4) 페이지 실데이터 치환 → (5) WebSocket/SSE 순으로 단계화.
 3.  **현 코드 불일치 항목을 작업 항목으로 승격**: `/signup`, `/oauth/callback`, `/calculator` 추가 및 `store/` vs `stores/` 단일화 등.
 
@@ -47,7 +50,7 @@
 
 ### Ver 2.7.4 주요 변경 사항
 
-1.  **온보딩 UI 확장**: Phase 2에서 정밀 사주 계산을 위해 성별(`gender`: MALE/FEMALE/OTHER), 양력/음력 구분(`calendarType`: SOLAR/LUNAR/LUNAR_LEAP), 생년월일시(`birthTime`: HH:mm, 선택, 기본값 12:00) 입력 필드를 추가해야 함.
+1.  **온보딩 UI 확장**: Phase 2에서 정밀 사주 계산을 위해 성별(`gender`: MALE/FEMALE/OTHER), 양력/음력 구분(`calendarType`: SOLAR/LUNAR/LUNAR_LEAP), 생년월일시(`birthTime`: HH:mm, 선택, 기본값 00:00:00) 입력 필드를 추가해야 함.
 2.  **온보딩 요청 DTO 확장**: `POST /api/v1/user/onboarding` 요청 Body에 `gender`, `calendarType`, `birthTime` 필드 추가 (기존 `birthDate`는 유지).
 
 ### Ver 2.7.5 주요 변경 사항
@@ -205,6 +208,26 @@ src/
 ## 5. 페이지별 상세 명세
 
 각 페이지는 백엔드 API와 1:1로 매핑되며, 데이터 로딩 및 상태 동기화가 필수적입니다.
+
+### 5.0 프론트 실제 구현 현황 스냅샷 (2026-01-19)
+
+- **공통**: 실데이터 연동 없음. 모든 페이지가 모의데이터/로컬 Zustand 상태 기반으로 동작하며 Axios/STOMP/SSE 미연결. 디자인 시안은 `design/*.png`에 저장(다크/라이트 포함).
+- **라우트 존재/리다이렉트**: `/`, `/market`, `/trade`, `/portfolio`, `/shop`, `/ranking`, `/oracle`, `/mypage`, `/login`, `/signup`, `/oauth/callback`, `/onboarding`, `/calculator`, `/gacha`(→ `/shop` 리다이렉트).
+- **대시보드 `/`**: 위젯 컴포넌트만 렌더, 데이터는 모두 모의/스토어 내부 더미.
+- **시장 `/market`**: 지수·뉴스·랭킹·거래량 모두 하드코딩 리스트. ETF 지수(SPY/QQQ/DIA) API 연동 없음.
+- **거래 `/trade`**: 워치리스트·호가·체결·차트 모두 모의값. WebSocket/STOMP 미사용, 주문 패널 `OrderPanel`도 실거래 API 미연결.
+- **포트폴리오 `/portfolio`**: 보유/히스토리/차트가 로컬 `portfolio-store` 기반이며 가격은 `stock-store` 모의값+Fallback. `/trade/portfolio`, `/trade/history` API 미연동.
+- **상점/가챠 `/shop` (+ `/gacha`)**: 코인 잔액, 아이템 목록, 확률 모두 클라이언트 상태/상수. `game` API(`items/gacha/inventory/equip`)와 미연결.
+- **랭킹 `/ranking`**: Top3/이벤트/업적/내 랭킹 모두 하드코딩. `ranking` API 및 실시간 반영 없음. 공개/랭킹참여 토글은 `user-store` 로컬 상태만 변경.
+- **마이페이지 `/mypage`**: 프로필/인벤토리/공개/랭킹 토글이 전부 `user-store` 모의데이터로만 동작. 프로필 이미지 업로드 없음, `user/me`, `game/inventory`, `game/equip`, `user/me` 업데이트 API 미연결.
+- **AI 도사 `/oracle`**: 채팅·사주/별자리 카드 모두 모의 응답. SSE(`chat/ask`) 미연결, 스트리밍 파싱 미구현.
+- **온보딩 `/onboarding`**: 닉네임·생년월일·시간·투자성향만 수집해 로컬 `calculateSaju` 호출. 스펙 요구(`gender`, `calendarType`, `birthTime` 기본값 00:00:00) 미충족, `POST /api/v1/user/onboarding` 미연동.
+- **계산기 `/calculator`**: 단순 준비중 문구만 표시.
+- **인증**:
+  - `/login`: 이메일 로그인 폼이 `auth-store.login`을 호출하지만 백엔드 응답 스키마 검증/에러 처리 최소. Kakao 버튼은 백엔드 리다이렉트만 수행, Refresh/401 재시도 미구현.
+  - `/signup`: UI만 존재, API 연동 미구현(알림만 표시).
+  - `/oauth/callback`: `accessToken` 쿼리만 저장 후 `checkAuth` 호출. `refreshToken` 미처리, 오류 시 Fallback/리다이렉트 없음.
+- **상태관리(Zustand)**: `auth-store`, `user-store`, `portfolio-store`, `stock-store` 모두 로컬 모의 상태이며 서버 동기화 로직 없음. `ui-store`는 존재하지만 경로 단일화 검증 필요.
 
 ### 5.1 인증 및 온보딩 (Hybrid Support)
 
@@ -490,8 +513,8 @@ Zustand를 사용하여 전역 상태를 효율적으로 관리하고 컴포넌�
   - `/market`: indices/news/movers
   - `/trade`: search/candles/orderbook + 주문
   - `/portfolio`: portfolio/history
-  - `/shop`: items/gacha/inventory/equip
-  - `/ranking`: ranking
+  - `/shop`: items/gacha/inventory/equip (백엔드 Phase 5 완료, 실제 연동 가능)
+  - `/ranking`: ranking (백엔드 Phase 5 완료, 실제 연동 가능)
   - `/mypage`: user/me 업데이트 + 공개/랭킹참여 토글
 - [ ] 스토어(`stores/*`)를 API 응답 타입에 맞게 재정의 및 전역 동기화
 
@@ -530,6 +553,21 @@ Zustand를 사용하여 전역 상태를 효율적으로 관리하고 컴포넌�
 
 **참고**: Phase 5는 백엔드의 Phase 10(Market Movers 관리 기능) 구현 후에만 필요한 작업입니다.
 
+### 🟢 Phase 5.5: 프론트 연동·DB 보강 (Shop/Gacha/Inventory/Ranking)
+
+- **목표**: 백엔드 Phase 5에서 완성된 Game/Shop/Ranking API를 프론트 2.7.11 화면에 실데이터로 연결하고, DB/응답 제약을 재확인합니다.
+- **실데이터 전환 체크리스트**:
+  - `/api/v1/game/items` → 상점/확률 카드: `{ items: [...] }` 패턴 유지, 카테고리 `NAMEPLATE|AVATAR|THEME`만 허용
+  - `/api/v1/game/gacha` → 가챠 실행: 중복만 존재 시 `GAME_002` 처리, 코인 차감/결과 UI 동기화
+  - `/api/v1/game/inventory`, `/api/v1/game/equip/{itemId}` → 인벤토리 조회·장착 단일성 반영(기존 장착 자동 해제)
+  - `/api/v1/game/ranking` → 랭킹/참여 토글: `is_ranking_joined` 필터 적용 상태 유지
+- **DB/제약 재확인**:
+  - `items.category`는 Flyway V3 기준 `NAMEPLATE/AVATAR/THEME` 외 값 존재 시 마이그레이션 실패(Fail Fast), `CHECK` 제약 권장
+  - 모든 리스트 응답은 `{items:[...]}` 패턴 유지, 필요 시 `asOf` 메타 포함
+- **실시간/지표 정합성**:
+  - STOMP 엔드포인트 `/ws-stomp` 고정, 토픽 규칙 `/topic/*`, `/user/queue/*` 동일
+  - 지수 데이터는 ETF(SPY/QQQ/DIA) 사용 문구를 백엔드/통합 명세와 동일하게 유지
+
 ---
 
 ## 9. 백엔드 구현 완료 현황 (참고)
@@ -567,5 +605,11 @@ flowchart TD
 
 ---
 
-**문서 버전:** 2.7.10 (Phase 4 Trade/Portfolio Engine 완전 구현 및 트러블슈팅 반영)
+**문서 버전:** 2.7.11 (Phase 5 완료 + Phase 5.5 프론트 연동·DB 제약 보강 체크리스트 반영)  
 **최종 수정일:** 2026-01-19
+
+### 수정 요약 (2026-01-19)
+
+- 문서 헤더/체인지로그를 2.7.11로 정렬하고 Phase 5.5 체크리스트를 명시했습니다.
+- Shop/Gacha/Inventory/Ranking 실데이터 전환 및 DB 제약/`{items:[]}`/카테고리/ETF/STOMP 정합성 요구사항을 로드맵에 추가했습니다.
+- 중복된 버전 표기를 제거하고 현행 기준을 단일화했습니다.

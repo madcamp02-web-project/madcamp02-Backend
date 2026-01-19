@@ -37,13 +37,16 @@ public class FinnhubClient {
     
     private final RestTemplate restTemplate;
     private final String apiKey;
+    private final FinnhubTradesWebSocketClient webSocketClient;
 
     public FinnhubClient(
             RestTemplate restTemplate,
-            @Value("${finnhub.api-key}") String apiKey
+            @Value("${finnhub.api-key}") String apiKey,
+            FinnhubTradesWebSocketClient webSocketClient
     ) {
         this.restTemplate = restTemplate;
         this.apiKey = apiKey;
+        this.webSocketClient = webSocketClient;
         
         if (apiKey == null || apiKey.isEmpty() || "sandbox_api_key".equals(apiKey)) {
             log.warn("Finnhub API 키가 설정되지 않았거나 sandbox 모드입니다. 일부 기능이 제한될 수 있습니다.");
@@ -300,6 +303,29 @@ public class FinnhubClient {
 
         public FinnhubException(String message, Throwable cause) {
             super(message, cause);
+        }
+    }
+
+    //------------------------------------------
+    // WebSocket Subscription Methods (Phase 6)
+    //------------------------------------------
+    // FinnhubTradesWebSocketClient에 위임하여 실제 WebSocket 메시지 전송
+    //------------------------------------------
+    public void subscribe(String symbol) {
+        log.info("Finnhub WebSocket 구독 요청: {}", symbol);
+        if (webSocketClient != null) {
+            webSocketClient.subscribe(symbol);
+        } else {
+            log.warn("WebSocket 클라이언트가 초기화되지 않았습니다. 구독 요청을 무시합니다: {}", symbol);
+        }
+    }
+
+    public void unsubscribe(String symbol) {
+        log.info("Finnhub WebSocket 구독 해제 요청: {}", symbol);
+        if (webSocketClient != null) {
+            webSocketClient.unsubscribe(symbol);
+        } else {
+            log.warn("WebSocket 클라이언트가 초기화되지 않았습니다. 구독 해제 요청을 무시합니다: {}", symbol);
         }
     }
 }
