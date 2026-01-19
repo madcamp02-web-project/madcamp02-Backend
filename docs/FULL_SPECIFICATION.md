@@ -25,6 +25,7 @@
 | **2.7.6** | **2026-01-19** | **데이터 전략 반영: EODHD + DB 캐싱, WebSocket 구독 관리(LRU), API 제한 및 에러 처리 명시**         | **MadCamp02** |
 | **2.7.7** | **2026-01-19** | **EODHD 무료 구독 제한(최근 1년) 주의사항 추가, 외부 API 확장 전략(13.3) 추가** | **MadCamp02** |
 | **2.7.8** | **2026-01-19** | **지수 조회를 ETF로 변경 (Finnhub Quote API는 지수 심볼 미지원) - SPY, QQQ, DIA 사용** | **MadCamp02** |
+| **2.7.9** | **2026-01-19** | **Phase 4: Trade/Portfolio Engine 완전 구현 및 문서 통합 (트랜잭션/락 전략, 다이어그램 포함)** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -541,6 +542,271 @@ _(나머지 테이블 `wallet`, `portfolio`, `trade_logs`, `inventory`, `watchli
 | GET    | `/api/v1/trade/portfolio`         | 보유 종목 및 수익률 조회 |
 | GET    | `/api/v1/trade/history`           | 거래 내역 조회           |
 
+#### 5.4.1 거래 실행 흐름
+
+거래 주문은 비관적 락(Pessimistic Lock)을 사용하여 동시성 문제를 해결합니다.
+
+**매수 주문 흐름**:
+
+```mermaid
+sequenceDiagram
+    participant C as Controller
+    participant TS as TradeService
+    participant WR as WalletRepository
+    participant PR as PortfolioRepository
+    participant SSR as StockService
+    participant TLR as TradeLogRepository
+    
+    C->>TS: executeOrder(userId, request)
+    activate TS
+    
+    TS->>SSR: getQuote(ticker)
+    Note over TS,SSR: 트랜잭션 외부에서 호출
+    SSR-->>TS: currentPrice
+    
+    TS->>TS: executeOrderInTransaction()
+    Note over TS: @Transactional 시작
+    
+    TS->>WR: findByUserIdWithLock(userId)
+    WR-->>TS: Wallet (락 획득)
+    
+    TS->>TS: 잔고 확인
+    alt 잔고 부족
+        TS-->>C: TradeException(INSUFFICIENT_BALANCE)
+    end
+    
+    TS->>PR: findByUserIdAndTickerWithLock(userId, ticker)
+    PR-->>TS: Portfolio or Empty (락 획득)
+    
+    TS->>TS: Wallet.deductCash()
+    TS->>TS: Portfolio.addQuantity() or 생성
+    
+    TS->>TLR: save(TradeLog)
+    TS->>WR: save(Wallet)
+    TS->>PR: save(Portfolio)
+    
+    Note over TS: 트랜잭션 커밋 (락 해제)
+    TS-->>C: TradeResponse
+    deactivate TS
+```
+
+**매도 주문 흐름**:
+
+```mermaid
+sequenceDiagram
+    participant C as Controller
+    participant TS as TradeService
+    participant WR as WalletRepository
+    participant PR as PortfolioRepository
+    participant SSR as StockService
+    participant TLR as TradeLogRepository
+    
+    C->>TS: executeOrder(userId, request)
+    activate TS
+    
+    TS->>SSR: getQuote(ticker)
+    Note over TS,SSR: 트랜잭션 외부에서 호출
+    SSR-->>TS: currentPrice
+    
+    TS->>TS: executeOrderInTransaction()
+    Note over TS: @Transactional 시작
+    
+    TS->>WR: findByUserIdWithLock(userId)
+    WR-->>TS: Wallet (락 획득)
+    
+    TS->>TS: executeSellOrder 호출
+    
+    TS->>PR: findByUserIdAndTickerWithLock(userId, ticker)
+    PR-->>TS: Portfolio (락 획득)
+    
+    alt 보유 수량 없음
+        TS-->>C: TradeException(INSUFFICIENT_QUANTITY)
+    end
+    
+    TS->>TS: 보유 수량 확인
+    alt 수량 부족
+        TS-->>C: TradeException(INSUFFICIENT_QUANTITY)
+    end
+    
+    TS->>TS: 실현 손익 계산
+    TS->>TS: Portfolio.subtractQuantity()
+    
+    TS->>TS: Wallet.addCash()
+    TS->>TS: Wallet.addRealizedProfit()
+    
+    alt Portfolio.isEmpty()
+        TS->>PR: delete(Portfolio)
+    end
+    
+    TS->>TLR: save(TradeLog with realizedPnl)
+    TS->>WR: save(Wallet)
+    TS->>PR: save(Portfolio) or delete
+    
+    Note over TS: 트랜잭션 커밋 (락 해제)
+    TS-->>C: TradeResponse
+    deactivate TS
+```
+
+#### 5.4.2 동시성 제어
+
+**동시성 문제 시나리오**:
+
+1. **시나리오 1: 동시 매수 주문**
+   - 사용자 A가 동시에 2개의 매수 주문을 보냄
+   - 잔고가 1개 주문만 가능한 경우
+   - **문제**: 두 주문 모두 잔고 확인 통과 후 실행되어 잔고 초과
+   - **해결**: 비관적 락으로 Wallet 조회 시 락 획득, 한 번에 하나의 거래만 실행
+
+2. **시나리오 2: 동시 매도 주문**
+   - 사용자 A가 동시에 2개의 매도 주문을 보냄
+   - 보유 수량이 1개 주문만 가능한 경우
+   - **문제**: 두 주문 모두 수량 확인 통과 후 실행되어 수량 초과
+   - **해결**: 비관적 락으로 Portfolio 조회 시 락 획득, 한 번에 하나의 거래만 실행
+
+3. **시나리오 3: 매수/매도 동시 실행**
+   - 사용자 A가 매수 주문과 매도 주문을 동시에 보냄
+   - **문제**: 포트폴리오 업데이트 시 경쟁 조건 발생
+   - **해결**: 비관적 락으로 Portfolio와 Wallet 모두 락 획득, 순차 실행
+
+**락 전략**:
+
+- **비관적 락 (Pessimistic Lock) 사용**
+  - `WalletRepository.findByUserIdWithLock()`: Wallet 조회 시 락 획득
+  - `PortfolioRepository.findByUserIdAndTickerWithLock()`: Portfolio 조회 시 락 획득
+  - 락 범위: 트랜잭션 시작 시점부터 커밋까지 유지
+
+- **트랜잭션 격리 수준**
+  - 기본값: `READ_COMMITTED` (PostgreSQL 기본값)
+  - 락 타임아웃: 5초 (기본값, 필요 시 조정)
+
+- **트랜잭션 범위**
+  - `@Transactional` 어노테이션으로 전체 거래를 하나의 트랜잭션으로 처리
+  - ✅ **외부 API 호출(`StockService.getQuote()`)은 트랜잭션 외부에서 호출됨**
+    - `executeOrder()`: 외부 API 호출 (트랜잭션 없음)
+    - `executeOrderInTransaction()`: 실제 거래 로직 (트랜잭션 내부)
+    - 외부 API 지연 시에도 트랜잭션 유지 시간을 최소화하여 성능 개선 완료
+  - ✅ **Self-invocation 문제 해결**: Spring AOP 프록시 동작을 위해 자기 주입(Self-injection) 패턴 사용
+    - `TradeService`에 `@Autowired @Lazy private TradeService self` 주입
+    - `executeOrder()`에서 `self.executeOrderInTransaction()` 호출로 프록시를 경유하여 트랜잭션 적용
+    - `executeOrderInTransaction()`은 `public`으로 변경 (프록시 호출 가능하도록)
+    - 보안: Controller에 매핑되지 않아 외부 HTTP 요청으로는 접근 불가능
+
+#### 5.4.3 Request/Response DTO 상세
+
+**TradeOrderRequest** (POST `/api/v1/trade/order`):
+
+```json
+{
+  "ticker": "AAPL",
+  "type": "BUY",
+  "quantity": 10
+}
+```
+
+- `ticker` (String, 필수): 종목 코드 (예: "AAPL")
+- `type` (String, 필수): 거래 타입 ("BUY" 또는 "SELL")
+- `quantity` (Integer, 필수, 최소값: 1): 주문 수량
+
+**AvailableBalanceResponse** (GET `/api/v1/trade/available-balance`):
+
+```json
+{
+  "availableBalance": 10000.0,
+  "cashBalance": 10000.0,
+  "currency": "USD"
+}
+```
+
+**TradeResponse** (POST `/api/v1/trade/order`):
+
+```json
+{
+  "orderId": 12345,
+  "ticker": "AAPL",
+  "type": "BUY",
+  "quantity": 10,
+  "executedPrice": 195.12,
+  "totalAmount": 1951.2,
+  "executedAt": "2026-01-19T12:00:00"
+}
+```
+
+**TradeHistoryResponse** (GET `/api/v1/trade/history`):
+
+```json
+{
+  "asOf": "2026-01-19T12:00:00",
+  "items": [
+    {
+      "logId": 12345,
+      "ticker": "AAPL",
+      "type": "BUY",
+      "quantity": 10,
+      "price": 195.12,
+      "totalAmount": 1951.2,
+      "realizedPnl": null,
+      "tradeDate": "2026-01-19T12:00:00"
+    },
+    {
+      "logId": 12346,
+      "ticker": "AAPL",
+      "type": "SELL",
+      "quantity": 5,
+      "price": 200.00,
+      "totalAmount": 1000.0,
+      "realizedPnl": 24.4,
+      "tradeDate": "2026-01-19T13:00:00"
+    }
+  ]
+}
+```
+
+**PortfolioResponse** (GET `/api/v1/trade/portfolio`):
+
+```json
+{
+  "asOf": "2026-01-19T12:00:00",
+  "summary": {
+    "totalEquity": 10500.0,
+    "cashBalance": 2500.0,
+    "totalPnl": 500.0,
+    "totalPnlPercent": 5.0,
+    "currency": "USD"
+  },
+  "positions": [
+    {
+      "ticker": "AAPL",
+      "quantity": 10,
+      "avgPrice": 180.0,
+      "currentPrice": 195.12,
+      "marketValue": 1951.2,
+      "pnl": 151.2,
+      "pnlPercent": 8.4
+    }
+  ]
+}
+```
+
+#### 5.4.4 예외 처리
+
+| 에러 코드 | HTTP 상태 | 설명 | 프론트엔드 처리 가이드 |
+| --------- | --------- | ---- | ---------------------- |
+| `TRADE_001` | 400 | 잔고 부족 | "잔고가 부족합니다" 토스트 메시지 표시 |
+| `TRADE_002` | 400 | 보유 수량 부족 | "보유 수량이 부족합니다" 토스트 메시지 표시 |
+| `TRADE_003` | 400 | 거래 시간 외 | 거래 불가 안내 모달 (향후 구현) |
+| `TRADE_004` | 400 | 유효하지 않은 종목 | 종목 검색으로 유도 |
+
+**에러 응답 예시**:
+
+```json
+{
+  "timestamp": "2026-01-19T12:00:00",
+  "status": 400,
+  "error": "TRADE_001",
+  "message": "잔고가 부족합니다."
+}
+```
+
 ### 5.5 상점/게임 API (`/api/v1/game`) 🆕
 
 | Method | Endpoint          | 설명                               |
@@ -828,5 +1094,5 @@ CREATE TABLE api_usage_logs (
 
 ---
 
-**문서 버전:** 2.7.8 (지수 조회 ETF 변경 반영)  
+**문서 버전:** 2.7.10 (Phase 4 Trade/Portfolio Engine 완전 구현 및 트러블슈팅 반영)  
 **최종 수정일:** 2026-01-19

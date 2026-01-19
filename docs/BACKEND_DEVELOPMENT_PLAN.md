@@ -25,6 +25,7 @@
 | **2.7.6** | **2026-01-19** | **데이터 전략 반영: EODHD + DB 캐싱 전략, WebSocket 구독 관리자(LRU), Quota 관리 로직, API 제한 대응** | **MadCamp02** |
 | **2.7.7** | **2026-01-19** | **EODHD 무료 구독 제한(최근 1년) 주의사항 추가, 외부 API 확장 전략(Phase 9) 추가** | **MadCamp02** |
 | **2.7.8** | **2026-01-19** | **지수 조회를 ETF로 변경 (Finnhub Quote API는 지수 심볼 미지원) - SPY, QQQ, DIA 사용** | **MadCamp02** |
+| **2.7.9** | **2026-01-19** | **Phase 4: Trade/Portfolio Engine 완전 구현 및 문서 통합 (트랜잭션/락 전략, 다이어그램 포함)** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -524,6 +525,169 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
   - `GET /api/v1/trade/history`
 - **무결성**: 동시 요청 대비 트랜잭션/락 전략을 명확히 하고(명세서의 흐름 그대로) 테스트로 고정
 
+#### 12.5.1 Phase 4 상세 설계
+
+**트랜잭션 및 락 전략**:
+
+- **비관적 락 (Pessimistic Lock) 사용**
+  - `WalletRepository.findByUserIdWithLock()`: Wallet 조회 시 락 획득
+  - `PortfolioRepository.findByUserIdAndTickerWithLock()`: Portfolio 조회 시 락 획득
+  - 락 범위: 트랜잭션 시작 시점부터 커밋까지 유지
+
+- **트랜잭션 격리 수준**
+  - 기본값: `READ_COMMITTED` (PostgreSQL 기본값)
+  - 락 타임아웃: 5초 (기본값, 필요 시 조정)
+
+- **트랜잭션 범위**
+  - `@Transactional` 어노테이션으로 전체 거래를 하나의 트랜잭션으로 처리
+  - ✅ **외부 API 호출(`StockService.getQuote()`)은 트랜잭션 외부에서 호출됨**
+    - `executeOrder()`: 외부 API 호출 (트랜잭션 없음)
+    - `executeOrderInTransaction()`: 실제 거래 로직 (트랜잭션 내부)
+    - 외부 API 지연 시에도 트랜잭션 유지 시간을 최소화하여 성능 개선
+  - ✅ **Self-invocation 문제 해결**: Spring AOP 프록시 동작을 위해 자기 주입(Self-injection) 패턴 사용
+    - `TradeService`에 `@Autowired @Lazy private TradeService self` 주입
+    - `executeOrder()`에서 `self.executeOrderInTransaction()` 호출로 프록시를 경유하여 트랜잭션 적용
+    - `executeOrderInTransaction()`은 `public`으로 변경 (프록시 호출 가능하도록)
+    - 보안: Controller에 매핑되지 않아 외부 HTTP 요청으로는 접근 불가능
+
+**거래 실행 흐름 다이어그램**:
+
+매수 주문 흐름:
+
+```mermaid
+sequenceDiagram
+    participant C as Controller
+    participant TS as TradeService
+    participant WR as WalletRepository
+    participant PR as PortfolioRepository
+    participant SSR as StockService
+    participant TLR as TradeLogRepository
+    
+    C->>TS: executeOrder(userId, request)
+    activate TS
+    
+    TS->>SSR: getQuote(ticker)
+    Note over TS,SSR: 트랜잭션 외부에서 호출
+    SSR-->>TS: currentPrice
+    
+    TS->>TS: executeOrderInTransaction()
+    Note over TS: @Transactional 시작
+    
+    TS->>WR: findByUserIdWithLock(userId)
+    WR-->>TS: Wallet (락 획득)
+    
+    TS->>TS: 잔고 확인
+    alt 잔고 부족
+        TS-->>C: TradeException(INSUFFICIENT_BALANCE)
+    end
+    
+    TS->>PR: findByUserIdAndTickerWithLock(userId, ticker)
+    PR-->>TS: Portfolio or Empty (락 획득)
+    
+    TS->>TS: Wallet.deductCash()
+    TS->>TS: Portfolio.addQuantity() or 생성
+    
+    TS->>TLR: save(TradeLog)
+    TS->>WR: save(Wallet)
+    TS->>PR: save(Portfolio)
+    
+    Note over TS: 트랜잭션 커밋 (락 해제)
+    TS-->>C: TradeResponse
+    deactivate TS
+```
+
+매도 주문 흐름:
+
+```mermaid
+sequenceDiagram
+    participant C as Controller
+    participant TS as TradeService
+    participant WR as WalletRepository
+    participant PR as PortfolioRepository
+    participant SSR as StockService
+    participant TLR as TradeLogRepository
+    
+    C->>TS: executeOrder(userId, request)
+    activate TS
+    
+    TS->>SSR: getQuote(ticker)
+    Note over TS,SSR: 트랜잭션 외부에서 호출
+    SSR-->>TS: currentPrice
+    
+    TS->>TS: executeOrderInTransaction()
+    Note over TS: @Transactional 시작
+    
+    TS->>WR: findByUserIdWithLock(userId)
+    WR-->>TS: Wallet (락 획득)
+    
+    TS->>TS: executeSellOrder 호출
+    
+    TS->>PR: findByUserIdAndTickerWithLock(userId, ticker)
+    PR-->>TS: Portfolio (락 획득)
+    
+    alt 보유 수량 없음
+        TS-->>C: TradeException(INSUFFICIENT_QUANTITY)
+    end
+    
+    TS->>TS: 보유 수량 확인
+    alt 수량 부족
+        TS-->>C: TradeException(INSUFFICIENT_QUANTITY)
+    end
+    
+    TS->>TS: 실현 손익 계산
+    TS->>TS: Portfolio.subtractQuantity()
+    
+    TS->>TS: Wallet.addCash()
+    TS->>TS: Wallet.addRealizedProfit()
+    
+    alt Portfolio.isEmpty()
+        TS->>PR: delete(Portfolio)
+    end
+    
+    TS->>TLR: save(TradeLog with realizedPnl)
+    TS->>WR: save(Wallet)
+    TS->>PR: save(Portfolio) or delete
+    
+    Note over TS: 트랜잭션 커밋 (락 해제)
+    TS-->>C: TradeResponse
+    deactivate TS
+```
+
+**동시성 문제 해결 방안**:
+
+1. **동시 매수 주문**: 비관적 락으로 Wallet 조회 시 락 획득, 한 번에 하나의 거래만 실행
+2. **동시 매도 주문**: 비관적 락으로 Portfolio 조회 시 락 획득, 한 번에 하나의 거래만 실행
+3. **매수/매도 동시 실행**: 비관적 락으로 Portfolio와 Wallet 모두 락 획득, 순차 실행
+
+**Service 구현 상세**:
+
+- **TradeService**
+  - `executeOrder()`: 거래 주문 실행 (외부 API 호출, 트랜잭션 외부)
+  - `executeOrderInTransaction()`: 트랜잭션 내부에서 거래 실행 (비관적 락 포함)
+  - `executeBuyOrder()`: 매수 주문 실행 (잔고 확인, Portfolio 생성/업데이트, 평단가 재계산)
+  - `executeSellOrder()`: 매도 주문 실행 (수량 확인, 실현 손익 계산, Portfolio 삭제)
+  - `getTradeHistory()`: 거래 내역 조회 (페이징, 기간 필터링 지원)
+
+- **PortfolioService**
+  - `getPortfolio()`: 포트폴리오 조회 및 평가 (현재가 조회, 손익률 계산, 현재가 조회 실패 시 처리)
+
+- **WalletService**
+  - `getAvailableBalance()`: 매수 가능 금액 조회
+
+**테스트 전략**:
+
+- **단위 테스트**: 잔고 부족, 수량 부족 시나리오
+- **통합 테스트**: 전체 거래 흐름 검증
+- **동시성 테스트**: 동시 매수/매도 주문 시나리오 (락 동작 확인)
+- **트랜잭션 검증 테스트**: 
+  - 트랜잭션 롤백 확인 (`TradeServiceTransactionTest.testTransactionRollbackOnException`)
+  - 트랜잭션 커밋 확인 (`TradeServiceTransactionTest.testTransactionCommitOnSuccess`)
+  - 외부 API 호출이 트랜잭션 외부에서 수행되는지 확인
+  - 비관적 락 동작 확인 (`TradeServiceTransactionTest.testPessimisticLockSequentialProcessing`)
+  - 테스트 클래스 레벨 `@Transactional` 제거 (동시성 테스트를 위해)
+  - 스레드 안전한 리스트 사용 (`Collections.synchronizedList()`)
+  - `StockService` 모킹 (`@MockBean`)으로 외부 API 호출 변수 제거
+
 ### 12.6 Phase 5: Shop/Game/Ranking (프론트 `/shop`, `/mypage`, `/ranking`)
 
 - **구현 대상**: `GameController`, `GachaService`, `InventoryService`, `RankingService`
@@ -662,5 +826,71 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
 
 ---
 
-**문서 버전:** 2.7.8 (지수 조회 ETF 변경 반영)  
+## 13.2 Phase 4 구현 완료 현황 (Trade/Portfolio Engine)
+
+**구현 일자**: 2026-01-19
+
+**구현 내용**:
+- ✅ DTO 생성: TradeOrderRequest, AvailableBalanceResponse, TradeResponse, TradeHistoryResponse
+- ✅ WalletService 구현: getAvailableBalance 메서드
+- ✅ PortfolioService 구현: getPortfolio 메서드 (현재가 조회 및 평가 로직 포함)
+- ✅ TradeService 구현: executeOrder, executeBuyOrder, executeSellOrder, getTradeHistory 메서드
+- ✅ TradeController 구현: 4개 엔드포인트 (available-balance, order, portfolio, history)
+- ✅ 트랜잭션 및 비관적 락 전략 구현
+- ✅ 동시성 테스트 및 통합 테스트 작성
+
+**검증 완료**:
+- ✅ 비관적 락 동작 확인: WalletRepository.findByUserIdWithLock(), PortfolioRepository.findByUserIdAndTickerWithLock()
+- ✅ 트랜잭션 범위 확인: @Transactional 어노테이션 적용
+- ✅ 동시성 제어 확인: 동시 매수/매도 주문 시나리오 테스트
+- ✅ 실현 손익 계산: 매도 시 평단가 기준 실현 손익 자동 계산
+- ✅ 포트폴리오 평가: 현재가 조회 및 손익률 계산
+- ✅ 예외 처리: TradeException 및 ErrorCode 매핑
+
+**참고사항**:
+- ✅ 외부 API 호출(`StockService.getQuote()`)은 트랜잭션 외부에서 호출됨 (성능 개선 완료)
+- 포트폴리오 조회 시 현재가 조회 실패 시에도 기본 정보는 포함하여 반환
+
+**트랜잭션 동작 검증**:
+
+구현된 코드가 계획서의 트랜잭션/락 전략을 정확히 따르는지 확인:
+
+1. ✅ **@Transactional 적용**: `executeOrderInTransaction()` 메서드에 `@Transactional` 어노테이션 적용
+   - `executeOrder()`: 외부 API 호출만 수행 (트랜잭션 없음)
+   - `executeOrderInTransaction()`: 실제 거래 로직 수행 (트랜잭션 내부)
+2. ✅ **비관적 락 사용**: 
+   - `WalletRepository.findByUserIdWithLock()` 사용 (PESSIMISTIC_WRITE)
+   - `PortfolioRepository.findByUserIdAndTickerWithLock()` 사용 (PESSIMISTIC_WRITE)
+3. ✅ **락 획득 순서**:
+   - **외부 API 호출** (트랜잭션 외부): 현재가 조회 (`StockService.getQuote()`)
+   - **트랜잭션 시작**: `executeOrderInTransaction()` 호출
+   - **매수 주문**: Wallet 락 → Portfolio 락 (또는 생성)
+   - **매도 주문**: Wallet 락 → Portfolio 락
+   - 실제 구현은 외부 API 호출을 먼저 수행하여 트랜잭션 유지 시간을 최소화
+4. ✅ **트랜잭션 범위**: 전체 거래 로직이 하나의 트랜잭션으로 처리
+5. ✅ **외부 API 호출**: `StockService.getQuote()`가 트랜잭션 외부에서 호출됨
+   - `executeOrder()`: 외부 API 호출 (트랜잭션 없음)
+   - `executeOrderInTransaction()`: 실제 거래 로직 (트랜잭션 내부)
+   - 외부 API 지연 시에도 트랜잭션 유지 시간을 최소화하여 성능 개선 완료
+6. ✅ **다이어그램 일치**: 문서 다이어그램이 실제 구현 순서와 일치하도록 업데이트 완료
+
+**동시성 테스트 결과**:
+
+- 동시 매수 주문: 비관적 락으로 인해 한 번에 하나의 거래만 실행됨 (잔고 초과 방지)
+- 동시 매도 주문: 비관적 락으로 인해 한 번에 하나의 거래만 실행됨 (수량 초과 방지)
+- 매수/매도 동시 실행: Portfolio와 Wallet 모두 락 획득으로 순차 실행 보장
+
+**트러블슈팅 및 해결**:
+
+- ✅ **Self-invocation 문제 해결**: `this.executeOrderInTransaction()` 호출 시 트랜잭션이 적용되지 않는 문제를 자기 주입 패턴으로 해결
+- ✅ **테스트 코드 리팩토링**: 
+  - 테스트 클래스 레벨 `@Transactional` 제거 (동시성 테스트를 위해)
+  - `@AfterEach`에서 수동 데이터 정리로 데이터 격리 보장
+  - 스레드 안전한 리스트 사용 (`Collections.synchronizedList()`)
+  - `StockService` 모킹으로 외부 API 호출 변수 제거
+- ✅ **트랜잭션 격리 문제 해결**: 별도 스레드에서 테스트 데이터를 볼 수 없는 문제를 트랜잭션 제거 및 수동 데이터 정리로 해결
+
+---
+
+**문서 버전:** 2.7.10 (Phase 4 Trade/Portfolio Engine 완전 구현 및 트러블슈팅 반영)  
 **최종 수정일:** 2026-01-19

@@ -20,6 +20,7 @@
 | **2.7.6** | **2026-01-19** | **데이터 전략 반영: Historical Data(캔들) API 제한/에러 처리, WebSocket 구독 관리 전략, Quota 초과 시 동작 명시**     | **MadCamp02** |
 | **2.7.7** | **2026-01-19** | **EODHD 무료 구독 제한(최근 1년) 주의사항 추가, 외부 API 확장 대응(Phase 4) 추가** | **MadCamp02** |
 | **2.7.8** | **2026-01-19** | **지수 조회를 ETF로 변경 (Finnhub Quote API는 지수 심볼 미지원) - SPY, QQQ, DIA 사용** | **MadCamp02** |
+| **2.7.9** | **2026-01-19** | **Phase 4: Trade/Portfolio Engine 완전 구현 및 문서 통합 (트랜잭션/락 전략, 다이어그램 포함)** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -262,6 +263,57 @@ src/
   - API: `GET /api/v1/stock/orderbook/{ticker}` (초기 로딩) + WebSocket 업데이트.
 - **주문 패널**: 매수/매도 탭, 수량/가격 입력, 주문 전송.
   - API: `POST /api/v1/trade/order`
+  - **매수 가능 금액 조회**: `GET /api/v1/trade/available-balance`로 현재 예수금 확인
+  - **동시성 주의사항**: 백엔드에서 비관적 락으로 동시 거래를 방지하지만, 프론트엔드에서도 중복 주문 방지 로직 구현 권장
+
+#### 5.4.1 거래 API 상세 명세
+
+**Request DTO (POST `/api/v1/trade/order`)**:
+
+```typescript
+interface TradeOrderRequest {
+  ticker: string;        // 종목 코드 (예: "AAPL")
+  type: "BUY" | "SELL"; // 거래 타입
+  quantity: number;     // 주문 수량 (최소값: 1)
+}
+```
+
+**Response DTO (POST `/api/v1/trade/order`)**:
+
+```typescript
+interface TradeResponse {
+  orderId: number;           // 거래 ID
+  ticker: string;            // 종목 코드
+  type: "BUY" | "SELL";     // 거래 타입
+  quantity: number;         // 체결 수량
+  executedPrice: number;    // 체결 가격
+  totalAmount: number;      // 총 거래 금액
+  executedAt: string;       // 체결 시간 (ISO-8601)
+}
+```
+
+**Response DTO (GET `/api/v1/trade/available-balance`)**:
+
+```typescript
+interface AvailableBalanceResponse {
+  availableBalance: number;  // 매수 가능 금액
+  cashBalance: number;       // 현재 예수금
+  currency: string;         // "USD"
+}
+```
+
+**에러 코드 매핑**:
+
+- `TRADE_001` (400): 잔고 부족 → "잔고가 부족합니다" 토스트 메시지 표시
+- `TRADE_002` (400): 보유 수량 부족 → "보유 수량이 부족합니다" 토스트 메시지 표시
+- `TRADE_003` (400): 거래 시간 외 → 거래 불가 안내 모달 (향후 구현)
+- `TRADE_004` (400): 유효하지 않은 종목 → 종목 검색으로 유도
+
+**동시성 주의사항**:
+
+- 백엔드에서 비관적 락으로 동시 거래를 방지하지만, 프론트엔드에서도 중복 주문 방지 로직 구현 권장
+- 주문 전송 중에는 버튼 비활성화 및 로딩 상태 표시
+- 주문 성공 후 매수 가능 금액 및 포트폴리오 자동 갱신
 
 ### 5.5 포트폴리오 (`/portfolio`) 🆕
 
@@ -270,6 +322,68 @@ src/
 - **자산 분석**: 섹터별/자산별 파이 차트.
 - **거래 내역**: 기간별 매수/매도 이력 조회.
   - API: `GET /api/v1/trade/history`
+
+#### 5.5.1 포트폴리오 API 상세 명세
+
+**Response DTO (GET `/api/v1/trade/portfolio`)**:
+
+```typescript
+interface PortfolioResponse {
+  asOf: string;  // ISO-8601 문자열
+  summary: {
+    totalEquity: number;      // 총 자산
+    cashBalance: number;      // 현금 잔고
+    totalPnl: number;         // 총 손익
+    totalPnlPercent: number; // 총 손익률 (%)
+    currency: string;         // "USD"
+  };
+  positions: Array<{
+    ticker: string;           // 종목 코드
+    quantity: number;         // 보유 수량
+    avgPrice: number;         // 평단가
+    currentPrice: number;     // 현재가
+    marketValue: number;      // 평가금액
+    pnl: number;              // 손익
+    pnlPercent: number;       // 손익률 (%)
+  }>;
+}
+```
+
+**현재가 조회 실패 시 처리**:
+
+- 현재가 조회 실패 시에도 기본 정보(평단가, 보유 수량)는 포함하여 반환
+- `currentPrice`는 평단가로 설정, `pnl`과 `pnlPercent`는 0으로 설정
+- UI에서 현재가 조회 실패 시 "가격 정보 없음" 표시 권장
+
+**Response DTO (GET `/api/v1/trade/history`)**:
+
+```typescript
+interface TradeHistoryResponse {
+  asOf: string;  // ISO-8601 문자열
+  items: Array<{
+    logId: number;           // 거래 ID
+    ticker: string;          // 종목 코드
+    type: "BUY" | "SELL";   // 거래 타입
+    quantity: number;       // 수량
+    price: number;          // 가격
+    totalAmount: number;    // 총 거래 금액
+    realizedPnl: number | null;  // 실현 손익 (매도 시만)
+    tradeDate: string;      // 거래 일시 (ISO-8601)
+  }>;
+}
+```
+
+**평가 로직 설명**:
+
+- 포트폴리오 평가는 백엔드에서 수행
+- 각 종목의 현재가를 조회하여 평가금액 및 손익 계산
+- 총 자산 = 현금 잔고 + 평가금액 합계
+- 총 손익 = 총 자산 - 초기 자산
+
+**실시간 업데이트 계획**:
+
+- 향후 WebSocket을 통한 포트폴리오 실시간 평가 업데이트
+- 현재는 페이지 새로고침 또는 수동 갱신 버튼으로 업데이트
 
 ### 5.6 상점 (`/shop`) 🆕
 
@@ -453,5 +567,5 @@ flowchart TD
 
 ---
 
-**문서 버전:** 2.7.8 (지수 조회 ETF 변경 반영)
+**문서 버전:** 2.7.10 (Phase 4 Trade/Portfolio Engine 완전 구현 및 트러블슈팅 반영)
 **최종 수정일:** 2026-01-19
