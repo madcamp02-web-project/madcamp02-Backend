@@ -1,6 +1,6 @@
 # 📁 MadCamp02: 최종 통합 명세서
 
-**Ver 2.7.7 - Complete Edition (Spec-Driven Alignment)**
+**Ver 2.7.8 - Complete Edition (Spec-Driven Alignment)**
 
 ---
 
@@ -24,6 +24,7 @@
 | **2.7.5** | **2026-01-18** | **Phase 2 완성: 월주/시주 계산 구현, 한국천문연구원 API 연동(양력↔음력 변환), 시간 기본값 00:00:00** | **MadCamp02** |
 | **2.7.6** | **2026-01-19** | **데이터 전략 반영: EODHD + DB 캐싱, WebSocket 구독 관리(LRU), API 제한 및 에러 처리 명시**         | **MadCamp02** |
 | **2.7.7** | **2026-01-19** | **EODHD 무료 구독 제한(최근 1년) 주의사항 추가, 외부 API 확장 전략(13.3) 추가** | **MadCamp02** |
+| **2.7.8** | **2026-01-19** | **지수 조회를 ETF로 변경 (Finnhub Quote API는 지수 심볼 미지원) - SPY, QQQ, DIA 사용** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -326,19 +327,36 @@ _(나머지 테이블 `wallet`, `portfolio`, `trade_logs`, `inventory`, `watchli
   "asOf": "2026-01-18T12:00:00",
   "items": [
     {
-      "code": "KOSPI",
-      "name": "KOSPI",
-      "value": 2650.12,
-      "change": 12.34,
-      "changePercent": 0.47,
-      "currency": "KRW"
+      "code": "NASDAQ",
+      "name": "NASDAQ",
+      "value": 15000.12,
+      "change": 123.45,
+      "changePercent": 0.83,
+      "currency": "USD"
+    },
+    {
+      "code": "SP500",
+      "name": "SP500",
+      "value": 4800.56,
+      "change": -12.34,
+      "changePercent": -0.26,
+      "currency": "USD"
+    },
+    {
+      "code": "DJI",
+      "name": "DJI",
+      "value": 38500.78,
+      "change": 234.56,
+      "changePercent": 0.61,
+      "currency": "USD"
     }
   ]
 }
 ```
 
-- `code`: 프론트 표시/맵핑 키 (예: KOSPI, NASDAQ, SP500)
+- `code`: 프론트 표시/맵핑 키 (예: NASDAQ, SP500, DJI)
 - `value/change/changePercent`: 카드/차트 요약에 사용
+- **참고**: Finnhub Quote API는 지수 심볼(`^DJI`, `^GSPC`, `^IXIC`)을 지원하지 않으므로, 해당 지수를 추적하는 ETF를 사용 (SPY=S&P 500, QQQ=NASDAQ-100, DIA=Dow Jones)
 
 #### B) Market: News (`GET /api/v1/market/news`)
 
@@ -473,7 +491,7 @@ _(나머지 테이블 `wallet`, `portfolio`, `trade_logs`, `inventory`, `watchli
 
 | Method | Endpoint                  | 설명                                   |
 | ------ | ------------------------- | -------------------------------------- |
-| GET    | `/market/indices`         | 주요 시장 지수 (KOSPI, S&P500 등) 조회 |
+| GET    | `/market/indices`         | 주요 시장 지수 조회 (ETF 사용: SPY, QQQ, DIA) |
 | GET    | `/market/news`            | 최신 시장 뉴스 조회                    |
 | GET    | `/market/movers`          | 급등/급락/거래량 상위 종목 조회        |
 | GET    | `/stock/search`           | 종목 검색 (Query: keyword)             |
@@ -633,12 +651,64 @@ MadCamp02는 유연한 연동을 위해 두 가지 인증 흐름을 모두 제�
   - 경고 메시지 처리: `warning` 필드가 있는 응답은 필터링하여 유효한 캔들 데이터만 저장
   - 초기 구축: 서버 시작 시점이 아니라 "최초 요청 시" 또는 "관리자 트리거"로 인기 종목(Top 10)만 우선 적재
 
-#### 13.1.3 Market Movers 캐싱
+#### 13.1.3 Market Movers 캐싱 (구현 완료)
 
-- **Redis 캐싱**: `MarketService.runMoversLogic()` 결과를 Redis에 1분~5분간 캐싱
-- **대상 종목**: 하드코딩 대신 `Top 20 Market Cap` 리스트(DB 관리)로 확장
+- **Redis 캐싱**: `MarketService.getMovers()` 결과를 Redis에 1분~5분간 캐싱
+- **DB 관리**: `Top 20 Market Cap` 리스트를 `market_cap_stocks` 테이블로 관리 (Flyway V6)
+  - Entity: `MarketCapStock` (`symbol`, `company_name`, `market_cap_rank`, `is_active`)
+  - Repository: `MarketCapStockRepository.findByIsActiveTrueOrderByMarketCapRankAsc()`
+  - 초기 데이터: 20개 종목 시드 (2026-01-19 기준)
+    - 상위 20개: `AAPL`, `MSFT`, `GOOGL`, `AMZN`, `NVDA`, `META`, `TSLA`, `BRK.B`, `V`, `UNH`, `JNJ`, `WMT`, `JPM`, `MA`, `PG`, `HD`, `DIS`, `AVGO`, `PEP`, `COST`
+  - Fallback: DB에 데이터가 없으면 기존 하드코딩 리스트(10개 종목) 사용
+  - 종목명 조회: DB의 `company_name` 우선 사용, 없으면 Search API로 조회
+  - **데이터 흐름**:
+    ```mermaid
+    flowchart TD
+        A[GET /api/v1/market/movers] --> B[MarketService.getMovers]
+        B --> C{DB에 데이터 있음?}
+        C -->|Yes| D[MarketCapStockRepository 조회]
+        C -->|No| E[Fallback: 하드코딩 리스트]
+        D --> F[활성화된 종목 20개 조회]
+        E --> G[기존 10개 종목]
+        F --> H[각 종목 Quote API 호출]
+        G --> H
+        H --> I[changePercent 기준 정렬]
+        I --> J[상위 5개 반환]
+        J --> K[MarketMoversResponse]
+    ```
 
 ### 13.2 데이터베이스 스키마 확장
+
+#### market_cap_stocks (Flyway V6)
+
+```sql
+CREATE TABLE market_cap_stocks (
+    id BIGSERIAL PRIMARY KEY,
+    symbol VARCHAR(20) NOT NULL UNIQUE,
+    company_name VARCHAR(200),
+    market_cap_rank INTEGER NOT NULL, -- 1~20 순위
+    is_active BOOLEAN DEFAULT TRUE,    -- 활성화 여부
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_market_cap_stocks_rank ON market_cap_stocks(market_cap_rank);
+CREATE INDEX idx_market_cap_stocks_active ON market_cap_stocks(is_active) WHERE is_active = TRUE;
+```
+
+**설계 원칙**:
+- `symbol`: 종목 심볼 (UNIQUE 제약)
+- `market_cap_rank`: 시가총액 순위 (1~20)
+- `is_active`: 활성화 여부 (향후 관리 기능 확장 대비)
+- 인덱스: 순위 및 활성화 여부 기준 조회 최적화
+
+**초기 데이터**: Top 20 Market Cap 종목 (2026-01-19 기준)
+- 시가총액 순위는 변동될 수 있으므로, 향후 관리자 API로 업데이트 가능하도록 설계
+
+**향후 확장 가능성** (Phase 10 계획):
+1. **관리자 API**: 종목 리스트 업데이트 엔드포인트 (Phase 10.1)
+2. **자동 갱신**: 스케줄러로 시가총액 순위 자동 업데이트 (Phase 10.2)
+3. **다른 시장**: 한국/일본 등 다른 시장의 Top 20 추가 (Phase 10.3)
 
 #### stock_candles (Flyway V5)
 
@@ -702,7 +772,61 @@ CREATE TABLE api_usage_logs (
 - Phase 9.3: `ProviderManager` 구현 및 자동 전환 로직
 - Phase 9.4: 데이터 병합 및 Fallback 메커니즘 구현
 
+### 13.4 Market Movers 관리 기능 (향후 개선)
+
+현재 `market_cap_stocks` 테이블의 종목 리스트는 초기 데이터로만 관리되고 있으며, 시가총액 순위는 변동될 수 있습니다.
+
+**구현 방향**:
+1. **관리자 API**: 종목 리스트 업데이트 엔드포인트
+   - `POST /api/v1/admin/market-cap-stocks`: 종목 리스트 일괄 업데이트
+   - `PUT /api/v1/admin/market-cap-stocks/{id}`: 개별 종목 수정 (순위, 활성화 여부 등)
+   - `DELETE /api/v1/admin/market-cap-stocks/{id}`: 종목 삭제 (비활성화)
+   - 인증: 관리자 권한 필요 (ROLE_ADMIN)
+   
+2. **자동 갱신**: 스케줄러로 시가총액 순위 자동 업데이트
+   - Spring `@Scheduled` 또는 Quartz 스케줄러 사용
+   - 주기: 일일 1회 (장 마감 후, 예: 오후 6시)
+   - 외부 API 활용: Finnhub 또는 다른 API로 시가총액 순위 조회
+   - 업데이트 전략: 기존 종목 순위 갱신 + 신규 종목 추가 (상위 20개 유지)
+   - 에러 처리: API 실패 시 기존 데이터 유지, 로그 기록
+
+**구현 우선순위**:
+- Phase 10.1: 관리자 API 구현 (인증/인가 포함)
+- Phase 10.2: 스케줄러 구현 및 외부 API 연동
+- Phase 10.3: 자동 갱신 로직 및 에러 처리
+
 ---
 
-**문서 버전:** 2.7.7 (API 제한 및 확장 전략 반영)  
+---
+
+## 14. 구현 완료 현황 (Phase 3.5: Market Movers DB 관리)
+
+### 14.1 Market Movers Top 20 Market Cap DB 관리 (구현 완료)
+
+**구현 일자**: 2026-01-19
+
+**구현 내용**:
+- ✅ Flyway V6 마이그레이션 파일 생성 (`V6__create_market_cap_stocks.sql`)
+- ✅ `MarketCapStock` Entity 생성
+- ✅ `MarketCapStockRepository` 생성
+- ✅ `MarketService.getMovers()` 수정 (DB 조회 로직 + Fallback)
+- ✅ 초기 데이터 시드 (20개 종목)
+- ✅ 문서 업데이트 완료
+
+**검증 완료**:
+- ✅ DB 스키마: `market_cap_stocks` 테이블 생성 및 인덱스 설정
+- ✅ Entity: 모든 필드 정상 매핑 (`symbol`, `company_name`, `market_cap_rank`, `is_active`)
+- ✅ Repository: `findByIsActiveTrueOrderByMarketCapRankAsc()` 메서드 구현
+- ✅ Service: DB 조회 로직 및 Fallback 로직 구현
+- ✅ 종목명 조회: DB의 `company_name` 우선 사용, 없으면 Search API 사용
+- ✅ API 응답 형식: 기존과 동일 (`MarketMoversResponse`)
+
+**참고사항**:
+- API 응답 형식은 기존과 동일하므로 프론트엔드 변경 불필요
+- 하위 호환성: DB에 데이터가 없으면 기존 하드코딩 리스트 사용
+- 초기 데이터는 미국 주식 시장 기준 (문서와 일치)
+
+---
+
+**문서 버전:** 2.7.8 (지수 조회 ETF 변경 반영)  
 **최종 수정일:** 2026-01-19

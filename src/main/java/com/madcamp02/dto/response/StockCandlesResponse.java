@@ -12,6 +12,7 @@ public class StockCandlesResponse {
     private String ticker;              // 종목 심볼
     private String resolution;           // 시간 간격 (1, 5, 15, 30, 60, D, W, M)
     private List<Candle> items;          // 캔들 데이터 리스트
+    private Boolean stale;               // 데이터가 구식인지 여부 (Quota 초과 시 기존 데이터 반환)
 
     @Getter
     @Builder

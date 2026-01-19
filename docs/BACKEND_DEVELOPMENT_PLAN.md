@@ -1,6 +1,6 @@
 # ⚙️ MadCamp02: 백엔드 개발 계획서
 
-**Ver 2.7.7 - Backend Development Blueprint (Spec-Driven Alignment)**
+**Ver 2.7.8 - Backend Development Blueprint (Spec-Driven Alignment)**
 
 ---
 
@@ -24,6 +24,7 @@
 | **2.7.5** | **2026-01-18** | **Phase 2 완성: 월주/시주 계산 구현, 한국천문연구원 API 연동(양력↔음력 변환), 레거시 호환 제거**    | **MadCamp02** |
 | **2.7.6** | **2026-01-19** | **데이터 전략 반영: EODHD + DB 캐싱 전략, WebSocket 구독 관리자(LRU), Quota 관리 로직, API 제한 대응** | **MadCamp02** |
 | **2.7.7** | **2026-01-19** | **EODHD 무료 구독 제한(최근 1년) 주의사항 추가, 외부 API 확장 전략(Phase 9) 추가** | **MadCamp02** |
+| **2.7.8** | **2026-01-19** | **지수 조회를 ETF로 변경 (Finnhub Quote API는 지수 심볼 미지원) - SPY, QQQ, DIA 사용** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -233,7 +234,7 @@ erDiagram
 
 | 메서드 | 경로                     | 설명                              |
 | ------ | ------------------------ | --------------------------------- |
-| GET    | `/api/v1/market/indices` | 주요 지수 (KOSPI, NASDAQ 등) 조회 |
+| GET    | `/api/v1/market/indices` | 주요 지수 조회 (ETF 사용: SPY, QQQ, DIA) |
 | GET    | `/api/v1/market/news`    | 최신 시장 뉴스 조회               |
 | GET    | `/api/v1/market/movers`  | 급등/급락/거래량 상위 종목 조회   |
 
@@ -328,6 +329,8 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
   - **제한**: 50 Symbols 동시 구독 제한
   - **전략**: Dynamic Subscription Manager (LRU 기반)로 구독 관리
 - **REST API**: Quote, News 등
+  - **Quote API 제한**: US stocks만 지원, 지수 심볼(`^DJI`, `^GSPC`, `^IXIC`)은 지원하지 않음
+  - **지수 데이터 대안**: 해당 지수를 추적하는 ETF 사용 (SPY=S&P 500, QQQ=NASDAQ-100, DIA=Dow Jones)
 - **Redis 캐싱**: 최신가 캐싱 (`stock:price:{ticker}`)
 
 ### 9.2 EODHD (Historical Data)
@@ -457,13 +460,14 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
 
 - **구현 대상**: `MarketController/Service`, `StockController/Service` (+ Finnhub REST 연동)
 - **엔드포인트**:
-  - `GET /api/v1/market/indices`
+  - `GET /api/v1/market/indices` (ETF 사용: SPY=S&P 500, QQQ=NASDAQ-100, DIA=Dow Jones)
   - `GET /api/v1/market/news`
   - `GET /api/v1/market/movers`
   - `GET /api/v1/stock/search`
   - `GET /api/v1/stock/quote/{ticker}`
   - `GET /api/v1/stock/candles/{ticker}` (EODHD + DB 캐싱)
 - **캐시 전략(권장)**: indices/news/movers는 Redis TTL 기반 캐시로 비용/지연 최소화
+- **지수 조회 주의사항**: Finnhub Quote API는 지수 심볼(`^DJI`, `^GSPC`, `^IXIC`)을 지원하지 않으므로, 해당 지수를 추적하는 ETF를 사용
 
 ### 12.4.1 Phase 3.5: 데이터 전략 구현 (DATA_STRATEGY_PLAN 기반)
 
@@ -481,9 +485,34 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
 - **초기 구축 전략 (Seed Data)**:
   - 서버 시작 시점이 아니라, **"최초 요청 시"** 또는 **"관리자 트리거"**로 인기 종목(Top 10)만 우선 적재
   - 비인기 종목은 요청이 들어올 때 쿼터가 남으면 적재
-- **Market Movers 캐싱**:
-  - Redis에 1분~5분간 캐싱 (`MarketService.runMoversLogic()` 결과)
-  - 대상 종목을 하드코딩 대신 `Top 20 Market Cap` 리스트(DB 관리)로 확장
+- **Market Movers 캐싱** (구현 완료):
+  - Redis에 1분~5분간 캐싱 (`MarketService.getMovers()` 결과)
+  - **DB 관리**: `market_cap_stocks` 테이블로 Top 20 Market Cap 종목 관리 (Flyway V6)
+    - Entity: `MarketCapStock` (`symbol`, `company_name`, `market_cap_rank`, `is_active`)
+    - Repository: `MarketCapStockRepository.findByIsActiveTrueOrderByMarketCapRankAsc()`
+    - 초기 데이터: 20개 종목 시드 (2026-01-19 기준)
+      - 상위 20개: `AAPL`, `MSFT`, `GOOGL`, `AMZN`, `NVDA`, `META`, `TSLA`, `BRK.B`, `V`, `UNH`, `JNJ`, `WMT`, `JPM`, `MA`, `PG`, `HD`, `DIS`, `AVGO`, `PEP`, `COST`
+    - Fallback: DB에 데이터가 없으면 기존 하드코딩 리스트(10개 종목) 사용
+    - 종목명 조회: DB의 `company_name` 우선 사용, 없으면 Search API로 조회
+  - **데이터 흐름**:
+    ```mermaid
+    flowchart TD
+        A[GET /api/v1/market/movers] --> B[MarketService.getMovers]
+        B --> C{DB에 데이터 있음?}
+        C -->|Yes| D[MarketCapStockRepository 조회]
+        C -->|No| E[Fallback: 하드코딩 리스트]
+        D --> F[활성화된 종목 20개 조회]
+        E --> G[기존 10개 종목]
+        F --> H[각 종목 Quote API 호출]
+        G --> H
+        H --> I[changePercent 기준 정렬]
+        I --> J[상위 5개 반환]
+        J --> K[MarketMoversResponse]
+    ```
+  - **향후 확장 가능성** (Phase 10 계획):
+    1. **관리자 API**: 종목 리스트 업데이트 엔드포인트 (Phase 10.1)
+    2. **자동 갱신**: 스케줄러로 시가총액 순위 자동 업데이트 (Phase 10.2)
+    3. **다른 시장**: 한국/일본 등 다른 시장의 Top 20 추가 (Phase 10.3)
 
 ### 12.5 Phase 4: Trade/Portfolio Engine (프론트 `/trade`, `/portfolio` 완성)
 
@@ -577,7 +606,61 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
 - Phase 9.3: `ProviderManager` 구현 및 자동 전환 로직
 - Phase 9.4: 데이터 병합 및 Fallback 메커니즘 구현
 
+### 12.11 Phase 10: Market Movers 관리 기능 (향후 개선)
+
+현재 `market_cap_stocks` 테이블의 종목 리스트는 초기 데이터로만 관리되고 있으며, 시가총액 순위는 변동될 수 있습니다.
+
+**구현 방향**:
+1. **관리자 API**: 종목 리스트 업데이트 엔드포인트
+   - `POST /api/v1/admin/market-cap-stocks`: 종목 리스트 일괄 업데이트
+   - `PUT /api/v1/admin/market-cap-stocks/{id}`: 개별 종목 수정 (순위, 활성화 여부 등)
+   - `DELETE /api/v1/admin/market-cap-stocks/{id}`: 종목 삭제 (비활성화)
+   - 인증: 관리자 권한 필요 (ROLE_ADMIN)
+   
+2. **자동 갱신**: 스케줄러로 시가총액 순위 자동 업데이트
+   - Spring `@Scheduled` 또는 Quartz 스케줄러 사용
+   - 주기: 일일 1회 (장 마감 후, 예: 오후 6시)
+   - 외부 API 활용: Finnhub 또는 다른 API로 시가총액 순위 조회
+   - 업데이트 전략: 기존 종목 순위 갱신 + 신규 종목 추가 (상위 20개 유지)
+   - 에러 처리: API 실패 시 기존 데이터 유지, 로그 기록
+
+**구현 우선순위**:
+- Phase 10.1: 관리자 API 구현 (인증/인가 포함)
+- Phase 10.2: 스케줄러 구현 및 외부 API 연동
+- Phase 10.3: 자동 갱신 로직 및 에러 처리
+
 ---
 
-**문서 버전:** 2.7.7 (API 제한 및 확장 전략 반영)  
+---
+
+## 13. 구현 완료 현황 (Phase 3.5: Market Movers DB 관리)
+
+### 13.1 Market Movers Top 20 Market Cap DB 관리 (구현 완료)
+
+**구현 일자**: 2026-01-19
+
+**구현 내용**:
+- ✅ Flyway V6 마이그레이션 파일 생성 (`V6__create_market_cap_stocks.sql`)
+- ✅ `MarketCapStock` Entity 생성
+- ✅ `MarketCapStockRepository` 생성
+- ✅ `MarketService.getMovers()` 수정 (DB 조회 로직 + Fallback)
+- ✅ 초기 데이터 시드 (20개 종목)
+- ✅ 문서 업데이트 완료
+
+**검증 완료**:
+- ✅ DB 스키마: `market_cap_stocks` 테이블 생성 및 인덱스 설정
+- ✅ Entity: 모든 필드 정상 매핑 (`symbol`, `company_name`, `market_cap_rank`, `is_active`)
+- ✅ Repository: `findByIsActiveTrueOrderByMarketCapRankAsc()` 메서드 구현
+- ✅ Service: DB 조회 로직 및 Fallback 로직 구현
+- ✅ 종목명 조회: DB의 `company_name` 우선 사용, 없으면 Search API 사용
+- ✅ API 응답 형식: 기존과 동일 (`MarketMoversResponse`)
+
+**참고사항**:
+- API 응답 형식은 기존과 동일하므로 프론트엔드 변경 불필요
+- 하위 호환성: DB에 데이터가 없으면 기존 하드코딩 리스트 사용
+- 초기 데이터는 미국 주식 시장 기준 (문서와 일치)
+
+---
+
+**문서 버전:** 2.7.8 (지수 조회 ETF 변경 반영)  
 **최종 수정일:** 2026-01-19

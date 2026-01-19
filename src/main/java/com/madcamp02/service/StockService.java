@@ -5,6 +5,8 @@ import com.madcamp02.domain.stock.StockCandleRepository;
 import com.madcamp02.dto.response.StockCandlesResponse;
 import com.madcamp02.dto.response.StockQuoteResponse;
 import com.madcamp02.dto.response.StockSearchResponse;
+import com.madcamp02.exception.BusinessException;
+import com.madcamp02.exception.ErrorCode;
 import com.madcamp02.external.EodhdClient;
 import com.madcamp02.external.FinnhubClient;
 import lombok.RequiredArgsConstructor;
@@ -63,13 +65,17 @@ public class StockService {
 
                 FinnhubClient.QuoteResponse quote = finnhubClient.getQuote(ticker);
 
-                double change = quote.getPreviousClose() != null && quote.getCurrentPrice() != null
-                                ? quote.getCurrentPrice() - quote.getPreviousClose()
-                                : 0.0;
-
-                double changePercent = quote.getPreviousClose() != null && quote.getPreviousClose() != 0
-                                ? (change / quote.getPreviousClose()) * 100
-                                : 0.0;
+                // Finnhub API가 제공하는 d(변동액)와 dp(변동률)를 우선 사용
+                // 없으면 계산
+                Double change = quote.getChange();
+                Double changePercent = quote.getChangePercent();
+                
+                if (change == null && quote.getCurrentPrice() != null && quote.getPreviousClose() != null) {
+                        change = quote.getCurrentPrice() - quote.getPreviousClose();
+                }
+                if (changePercent == null && quote.getPreviousClose() != null && quote.getPreviousClose() != 0 && change != null) {
+                        changePercent = (change / quote.getPreviousClose()) * 100;
+                }
 
                 return StockQuoteResponse.builder()
                                 .ticker(ticker)
@@ -78,9 +84,8 @@ public class StockService {
                                 .high(quote.getHigh())
                                 .low(quote.getLow())
                                 .previousClose(quote.getPreviousClose())
-                                .change(change)
-                                .changePercent(changePercent)
-                                .timestamp(quote.getTimestamp())
+                                .change(change != null ? change : 0.0)
+                                .changePercent(changePercent != null ? changePercent : 0.0)
                                 .build();
         }
 
@@ -88,31 +93,66 @@ public class StockService {
         // 캔들 차트 데이터 조회 (GET /api/v1/stock/candles/{ticker})
         // ------------------------------------------
         // Phase 3.5 Data Strategy: EODHD + DB Caching + Quota Management
-        // 1. DB 조회
-        // 2. 데이터 없으면 Quota 체크 후 EODHD 호출
-        // 3. DB 저장 및 반환
+        // Step 1: DB 조회
+        // Step 2: 데이터 최신성 체크 (오늘 장 종료 후 오늘 데이터 존재 여부)
+        // Step 3: Quota 체크 → EODHD 호출 또는 기존 데이터 반환
+        // Step 4: Quota 초과 시 Case A(기존 데이터 반환 + Stale 표시) 또는 Case B(429 에러)
         // ------------------------------------------
         @Transactional
         public StockCandlesResponse getCandles(String ticker, String resolution, LocalDateTime from, LocalDateTime to) {
                 log.debug("캔들 차트 데이터 조회 요청: ticker={}, from={}, to={}", ticker, from, to);
 
-                // 1. 날짜 변환 (Time 무시, Date 기준)
+                // Step 1: 날짜 변환 및 resolution → period 매핑
                 LocalDate fromDate = from.toLocalDate();
                 LocalDate toDate = to.toLocalDate();
+                LocalDate today = LocalDate.now();
 
-                // 2. DB 조회
+                // resolution을 EODHD API의 period로 변환
+                // resolution: 1, 5, 15, 30, 60, D, W, M
+                // period: d (daily), w (weekly), m (monthly)
+                String period = "d"; // 기본값: 일간
+                if (resolution != null) {
+                        String upperResolution = resolution.toUpperCase();
+                        if ("W".equals(upperResolution)) {
+                                period = "w"; // 주간
+                        } else if ("M".equals(upperResolution)) {
+                                period = "m"; // 월간
+                        } else {
+                                // 1, 5, 15, 30, 60, D는 모두 일간 데이터로 처리
+                                period = "d";
+                        }
+                }
+                String order = "a"; // 오름차순 (기본값)
+
+                // Step 2: DB 조회
                 List<StockCandle> cachedCandles = stockCandleRepository
                                 .findAllBySymbolAndDateBetweenOrderByDateAsc(ticker, fromDate, toDate);
 
-                // 3. 데이터 전략 판단
-                // 단순화 전략: DB에 데이터가 하나도 없으면 API 호출 시도
-                // (향후 개선: 데이터가 있지만 비어있는 구간이 크거나, 최신 데이터가 누락된 경우도 포함 가능)
-                if (cachedCandles.isEmpty()) {
+                // Step 3: 데이터 최신성 체크 (오늘 장 종료 후 오늘 데이터 존재 여부)
+                // 미국 주식 시장은 보통 9:30 AM - 4:00 PM ET (동부시간)
+                // 한국시간으로는 약 22:30 - 05:00 (다음날)이지만, 간단하게 "오늘 날짜의 데이터가 있는지"만 체크
+                boolean needsRefresh = false;
+                if (!cachedCandles.isEmpty()) {
+                        // 요청 범위에 오늘 날짜가 포함되어 있고, 오늘 데이터가 없으면 갱신 필요
+                        if (toDate.isAfter(today.minusDays(1)) && 
+                            cachedCandles.stream().noneMatch(c -> c.getDate().equals(today))) {
+                                needsRefresh = true;
+                                log.debug("오늘 데이터가 없어 갱신 필요: ticker={}, latestDate={}", ticker,
+                                                cachedCandles.isEmpty() ? null : cachedCandles.get(cachedCandles.size() - 1).getDate());
+                        }
+                } else {
+                        // DB에 데이터가 없으면 갱신 필요
+                        needsRefresh = true;
+                }
+
+                // Step 4: Quota 체크 및 EODHD 호출
+                boolean isStale = false;
+                if (needsRefresh) {
                         if (quotaManager.checkQuota("EODHD")) {
                                 try {
-                                        // API 호출
+                                        // API 호출 (period, order 포함)
                                         List<EodhdClient.EodhdCandle> eodhdCandles = eodhdClient
-                                                        .getHistoricalData(ticker, fromDate, toDate);
+                                                        .getHistoricalData(ticker, fromDate, toDate, period, order);
 
                                         if (eodhdCandles != null && !eodhdCandles.isEmpty()) {
                                                 List<StockCandle> newCandles = eodhdCandles.stream()
@@ -151,17 +191,31 @@ public class StockService {
                                                 }
                                         }
                                 } catch (Exception e) {
-                                        log.error("EODHD API 처리 중 오류 발생 (무시하고 빈 응답 반환): {}", e.getMessage(), e);
-                                        // 500 에러 방지: 예외를 던지지 않고 로그만 남김
+                                        log.error("EODHD API 처리 중 오류 발생: {}", e.getMessage(), e);
+                                        // API 호출 실패 시 기존 데이터가 있으면 그것을 반환 (Stale 표시)
+                                        if (cachedCandles.isEmpty()) {
+                                                // 기존 데이터도 없으면 예외를 던지지 않고 빈 리스트 반환
+                                                log.warn("EODHD API 실패 및 기존 데이터 없음: ticker={}", ticker);
+                                        } else {
+                                                isStale = true;
+                                                log.warn("EODHD API 실패, 기존 데이터 반환 (Stale): ticker={}", ticker);
+                                        }
                                 }
                         } else {
-                                log.warn("EODHD Quota 초과로 데이터 갱신 불가: ticker={}", ticker);
-                                // Quota 초과 시: DB가 비어있으므로 그냥 빈 리스트 반환 (Case B)
-                                // 만약 Stale Data라도 있으면 그걸 반환했겠지만, 여기는 isEmpty() 블록임.
+                                // Quota 초과 시 Case A 또는 Case B
+                                if (cachedCandles.isEmpty()) {
+                                        // Case B: 기존 데이터 없음 → 429 에러
+                                        log.warn("EODHD Quota 초과 및 기존 데이터 없음: ticker={}", ticker);
+                                        throw new BusinessException(ErrorCode.QUOTA_EXCEEDED);
+                                } else {
+                                        // Case A: 기존 데이터 반환 + Stale 표시
+                                        isStale = true;
+                                        log.warn("EODHD Quota 초과, 기존 데이터 반환 (Stale): ticker={}", ticker);
+                                }
                         }
                 }
 
-                // 4. Entity -> Response DTO 변환
+                // Step 5: Entity -> Response DTO 변환
                 // 정렬 보장 (DB에서 이미 정렬했지만 안전하게 다시 정렬)
                 cachedCandles.sort(Comparator.comparing(StockCandle::getDate));
 
@@ -180,6 +234,7 @@ public class StockService {
                                 .ticker(ticker)
                                 .resolution(resolution)
                                 .items(items)
+                                .stale(isStale)
                                 .build();
         }
 }
