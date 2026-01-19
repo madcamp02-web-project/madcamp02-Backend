@@ -53,12 +53,28 @@ public class FinnhubClient {
     //------------------------------------------
     // Quote 응답 DTO (현재가)
     //------------------------------------------
+    // Finnhub API 공식 문서: https://finnhub.io/docs/api/quote
+    // 응답 필드:
+    //   - c: Current price
+    //   - d: Change (변동액)
+    //   - dp: Percent change (변동률)
+    //   - h: High price of the day
+    //   - l: Low price of the day
+    //   - o: Open price of the day
+    //   - pc: Previous close price
+    //------------------------------------------
     @Getter
     @Builder
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class QuoteResponse {
         @JsonProperty("c")
         private Double currentPrice;      // 현재가
+        
+        @JsonProperty("d")
+        private Double change;            // 변동액 (API에서 제공)
+        
+        @JsonProperty("dp")
+        private Double changePercent;     // 변동률 (API에서 제공, %)
         
         @JsonProperty("h")
         private Double high;               // 당일 최고가
@@ -71,9 +87,6 @@ public class FinnhubClient {
         
         @JsonProperty("pc")
         private Double previousClose;      // 전일 종가
-        
-        @JsonProperty("t")
-        private Long timestamp;            // UNIX timestamp (초)
     }
 
     //------------------------------------------
@@ -161,8 +174,11 @@ public class FinnhubClient {
                     url, QuoteResponse.class);
 
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                log.debug("Finnhub API 응답 (Quote): {}", response.getBody());
-                return response.getBody();
+                QuoteResponse quoteResponse = response.getBody();
+                log.debug("Finnhub API 응답 (Quote): symbol={}, currentPrice={}, previousClose={}, change={}, changePercent={}", 
+                        symbol, quoteResponse.getCurrentPrice(), quoteResponse.getPreviousClose(), 
+                        quoteResponse.getChange(), quoteResponse.getChangePercent());
+                return quoteResponse;
             } else {
                 log.warn("Finnhub API 응답 실패 (Quote): status={}, body={}", 
                         response.getStatusCode(), response.getBody());
@@ -181,13 +197,30 @@ public class FinnhubClient {
     //   - query: 검색어 (종목명, 심볼, ISIN, CUSIP)
     //------------------------------------------
     public SearchResponse searchSymbol(String query) {
-        try {
-            String url = UriComponentsBuilder.fromHttpUrl(BASE_URL + "/search")
-                    .queryParam("q", query)
-                    .queryParam("token", apiKey)
-                    .toUriString();
+        return searchSymbol(query, null);
+    }
 
-            log.debug("Finnhub API 호출 (Search): query={}", query);
+    //------------------------------------------
+    // 종목 검색 (GET /api/v1/search) - exchange 포함
+    //------------------------------------------
+    // 파라미터:
+    //   - query: 검색어 (종목명, 심볼, ISIN, CUSIP)
+    //   - exchange: 거래소 제한 (optional, 예: US)
+    //------------------------------------------
+    public SearchResponse searchSymbol(String query, String exchange) {
+        try {
+            UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(BASE_URL + "/search")
+                    .queryParam("q", query)
+                    .queryParam("token", apiKey);
+            
+            // exchange가 null이 아니면 파라미터 추가
+            if (exchange != null && !exchange.isEmpty()) {
+                builder.queryParam("exchange", exchange);
+            }
+            
+            String url = builder.toUriString();
+
+            log.debug("Finnhub API 호출 (Search): query={}, exchange={}", query, exchange);
 
             ResponseEntity<SearchResponse> response = restTemplate.getForEntity(
                     url, SearchResponse.class);
@@ -202,7 +235,7 @@ public class FinnhubClient {
                 throw new FinnhubException("Search 조회 실패: " + query);
             }
         } catch (RestClientException e) {
-            log.error("Finnhub API 호출 실패 (Search): query={}", query, e);
+            log.error("Finnhub API 호출 실패 (Search): query={}, exchange={}", query, exchange, e);
             throw new FinnhubException("Search 조회 중 오류 발생: " + e.getMessage(), e);
         }
     }
@@ -214,13 +247,30 @@ public class FinnhubClient {
     //   - category: 카테고리 (general, forex, crypto, merger)
     //------------------------------------------
     public List<NewsItem> getNews(String category) {
-        try {
-            String url = UriComponentsBuilder.fromHttpUrl(BASE_URL + "/news")
-                    .queryParam("category", category)
-                    .queryParam("token", apiKey)
-                    .toUriString();
+        return getNews(category, null);
+    }
 
-            log.debug("Finnhub API 호출 (News): category={}", category);
+    //------------------------------------------
+    // 시장 뉴스 조회 (GET /api/v1/news) - minId 포함
+    //------------------------------------------
+    // 파라미터:
+    //   - category: 카테고리 (general, forex, crypto, merger)
+    //   - minId: 이 ID 이후의 뉴스만 조회 (optional, 기본값: 0)
+    //------------------------------------------
+    public List<NewsItem> getNews(String category, Integer minId) {
+        try {
+            UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(BASE_URL + "/news")
+                    .queryParam("category", category)
+                    .queryParam("token", apiKey);
+            
+            // minId가 null이 아니면 파라미터 추가
+            if (minId != null) {
+                builder.queryParam("minId", minId);
+            }
+            
+            String url = builder.toUriString();
+
+            log.debug("Finnhub API 호출 (News): category={}, minId={}", category, minId);
 
             ResponseEntity<NewsItem[]> response = restTemplate.getForEntity(
                     url, NewsItem[].class);
@@ -235,7 +285,7 @@ public class FinnhubClient {
                 return new ArrayList<>();
             }
         } catch (RestClientException e) {
-            log.error("Finnhub API 호출 실패 (News): category={}", category, e);
+            log.error("Finnhub API 호출 실패 (News): category={}, minId={}", category, minId, e);
             return new ArrayList<>();
         }
     }

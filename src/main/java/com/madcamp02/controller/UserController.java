@@ -23,6 +23,7 @@ import com.madcamp02.dto.response.UserWalletResponse;
 import com.madcamp02.security.CustomUserDetails;
 import com.madcamp02.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -44,7 +45,7 @@ public class UserController {
     // 요청: GET /api/v1/user/me
     // 헤더: Authorization: Bearer {accessToken}
     //------------------------------------------
-    @Operation(summary = "내 프로필 조회", description = "로그인된 사용자의 프로필/설정 상세 조회")
+    @Operation(summary = "내 프로필 조회", description = "로그인된 사용자의 프로필/설정 상세 조회", security = @SecurityRequirement(name = "bearer-key"))
     @GetMapping("/me")
     public ResponseEntity<UserMeResponse> me(@AuthenticationPrincipal CustomUserDetails userDetails) {
         UserMeResponse response = userService.getMe(userDetails.getUserId());
@@ -58,7 +59,7 @@ public class UserController {
     // 헤더: Authorization: Bearer {accessToken}
     // Body: { "nickname": "...", "isPublic": true, "isRankingJoined": true, "avatarUrl": "..." }
     //------------------------------------------
-    @Operation(summary = "내 프로필 수정", description = "닉네임/공개여부/랭킹참여/아바타URL 등 설정 수정")
+    @Operation(summary = "내 프로필 수정", description = "닉네임/공개여부/랭킹참여/아바타URL 등 설정 수정", security = @SecurityRequirement(name = "bearer-key"))
     @PutMapping("/me")
     public ResponseEntity<UserMeResponse> updateMe(
             @AuthenticationPrincipal CustomUserDetails userDetails,
@@ -91,7 +92,7 @@ public class UserController {
     // 요청: GET /api/v1/user/wallet
     // 헤더: Authorization: Bearer {accessToken}
     //------------------------------------------
-    @Operation(summary = "지갑 조회", description = "로그인된 사용자의 지갑(예수금/코인 등) 조회")
+    @Operation(summary = "지갑 조회", description = "로그인된 사용자의 지갑(예수금/코인 등) 조회", security = @SecurityRequirement(name = "bearer-key"))
     @GetMapping("/wallet")
     public ResponseEntity<UserWalletResponse> wallet(@AuthenticationPrincipal CustomUserDetails userDetails) {
         UserWalletResponse response = userService.getWallet(userDetails.getUserId());

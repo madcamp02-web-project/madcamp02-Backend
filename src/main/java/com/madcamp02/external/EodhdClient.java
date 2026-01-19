@@ -92,9 +92,25 @@ public class EodhdClient {
     // ------------------------------------------
     // Historical Data 조회
     // ------------------------------------------
-    // GET /eod/{ticker}?api_token={key}&fmt=json&from={date}&to={date}
+    // EODHD API 공식 문서: https://eodhd.com/financial-apis/api-for-historical-data-and-volumes/
+    // GET /eod/{ticker}?api_token={key}&fmt=json&from={date}&to={date}&period={d|w|m}&order={a|d}
+    // 
+    // 파라미터:
+    //   - api_token: API Key (필수)
+    //   - fmt: 'json' 또는 'csv' (기본값: 'csv')
+    //   - period: 'd' (daily), 'w' (weekly), 'm' (monthly) (기본값: 'd')
+    //   - order: 'a' (ascending), 'd' (descending) (기본값: 'a')
+    //   - from: YYYY-MM-DD 형식 (선택)
+    //   - to: YYYY-MM-DD 형식 (선택)
     // ------------------------------------------
     public List<EodhdCandle> getHistoricalData(String ticker, LocalDate from, LocalDate to) {
+        return getHistoricalData(ticker, from, to, "d", "a");
+    }
+
+    // ------------------------------------------
+    // Historical Data 조회 (period, order 포함)
+    // ------------------------------------------
+    public List<EodhdCandle> getHistoricalData(String ticker, LocalDate from, LocalDate to, String period, String order) {
         if (apiKey == null || apiKey.isEmpty()) {
             throw new EodhdException("EODHD API Key is missing");
         }
@@ -112,6 +128,16 @@ public class EodhdClient {
             UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(BASE_URL + "/eod/" + formattedTicker)
                     .queryParam("api_token", apiKey)
                     .queryParam("fmt", "json");
+
+            // period 파라미터 (d=일간, w=주간, m=월간, 기본값: d)
+            if (period != null && !period.isEmpty()) {
+                builder.queryParam("period", period);
+            }
+
+            // order 파라미터 (a=오름차순, d=내림차순, 기본값: a)
+            if (order != null && !order.isEmpty()) {
+                builder.queryParam("order", order);
+            }
 
             if (from != null) {
                 builder.queryParam("from", from.toString());

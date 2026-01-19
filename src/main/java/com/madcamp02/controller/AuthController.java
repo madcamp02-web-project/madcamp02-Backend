@@ -123,6 +123,7 @@ import com.madcamp02.dto.response.AuthResponse;
 import com.madcamp02.security.CustomUserDetails;
 import com.madcamp02.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -263,7 +264,7 @@ public class AuthController {
     // 요청: POST /api/v1/auth/logout
     // 헤더: Authorization: Bearer {accessToken}
     //------------------------------------------
-    @Operation(summary = "로그아웃", description = "Refresh Token 무효화")
+    @Operation(summary = "로그아웃", description = "Refresh Token 무효화", security = @SecurityRequirement(name = "bearer-key"))
     @PostMapping("/logout")
     // ★ 핵심: @AuthenticationPrincipal
     // 이 요청을 보낼 때 헤더에 붙인 Access Token을 스프링 시큐리티가 미리 검사
@@ -294,7 +295,7 @@ public class AuthController {
     // 요청: GET /api/v1/auth/me
     // 헤더: Authorization: Bearer {accessToken}
     //------------------------------------------
-    @Operation(summary = "현재 사용자 정보", description = "로그인된 사용자 정보 조회")
+    @Operation(summary = "현재 사용자 정보", description = "로그인된 사용자 정보 조회", security = @SecurityRequirement(name = "bearer-key"))
     @GetMapping("/me") // GET /me 요청 처리
     public ResponseEntity<AuthResponse> me(@AuthenticationPrincipal CustomUserDetails userDetails) {
         // userDetails는 JwtAuthenticationFilter -> JwtTokenProvider -> CustomUserDetailsService를 통해

@@ -65,7 +65,9 @@ public enum ErrorCode {
     // SERVER_001: 내부 서버 오류
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "SERVER_001", "내부 서버 오류가 발생했습니다."),
     // SERVER_002: 외부 API 호출 실패 (추가)
-    EXTERNAL_API_ERROR(HttpStatus.SERVICE_UNAVAILABLE, "SERVER_002", "외부 API 호출에 실패했습니다.");
+    EXTERNAL_API_ERROR(HttpStatus.SERVICE_UNAVAILABLE, "SERVER_002", "외부 API 호출에 실패했습니다."),
+    // SERVER_003: Quota 초과 (Phase 3.5)
+    QUOTA_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "QUOTA_EXCEEDED", "일일 외부 데이터 요청 허용량을 초과했습니다. (매일 00:00 초기화)");
 
     private final HttpStatus httpStatus;
     private final String code;

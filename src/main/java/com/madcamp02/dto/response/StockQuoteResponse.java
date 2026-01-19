@@ -8,12 +8,11 @@ import lombok.Getter;
 @Builder
 public class StockQuoteResponse {
     private String ticker;              // 종목 심볼
-    private Double currentPrice;        // 현재가
-    private Double open;                 // 당일 시가
-    private Double high;                 // 당일 최고가
-    private Double low;                  // 당일 최저가
-    private Double previousClose;        // 전일 종가
-    private Double change;               // 변동액 (currentPrice - previousClose)
-    private Double changePercent;        // 변동률 (%)
-    private Long timestamp;              // UNIX timestamp (초)
+    private Double currentPrice;        // 현재가 (c)
+    private Double open;                 // 당일 시가 (o)
+    private Double high;                 // 당일 최고가 (h)
+    private Double low;                  // 당일 최저가 (l)
+    private Double previousClose;        // 전일 종가 (pc)
+    private Double change;               // 변동액 (d) - API에서 제공
+    private Double changePercent;        // 변동률 (dp) - API에서 제공, %
 }
