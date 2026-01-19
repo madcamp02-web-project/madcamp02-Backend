@@ -1,6 +1,6 @@
 # 📁 MadCamp02: 최종 통합 명세서
 
-**Ver 2.7.12 - Complete Edition (Spec-Driven Alignment)**
+**Ver 2.7.13 - Complete Edition (Spec-Driven Alignment)**
 
 ---
 
@@ -29,6 +29,7 @@
 | **2.7.10** | **2026-01-19** | **Phase 5: Game/Shop/Ranking API 구현 완료 (가챠/인벤토리/장착/랭킹)** | **MadCamp02** |
 | **2.7.11** | **2026-01-19** | **프론트 2.7.11 스냅샷 반영: Phase 5 완료 기반 “Phase 5.5: 프론트 연동·DB 제약 보강” 추가(Shop/Gacha/Inventory/Ranking 실데이터 전환 체크리스트, `{items:[]}`·카테고리/ETF/STOMP 정합성 재확인)** | **MadCamp02** |
 | **2.7.12** | **2026-01-19** | **Phase 5.5 실행: `/api/v1/game/*` 응답 DTO/에러 코드(GAME_001~003)·items.category CHECK 제약·랭킹 필터(is_ranking_joined) 구현 상태를 스펙과 최종 정합화** | **MadCamp02** |
+| **2.7.13** | **2026-01-19** | **Phase 6: 실시간 통신(10장) 추가 - STOMP 토픽/payload 스키마, Finnhub WebSocket 제약사항, ticker destination 안전성 정책 고정 (FinnhubTradesWebSocketClient/TradePriceBroadcastService/StompDestinationUtils 기준)** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -937,6 +938,181 @@ MadCamp02는 유연한 연동을 위해 두 가지 인증 흐름을 모두 제�
 
 ---
 
+## 10. 실시간 통신
+
+### 10.1 WebSocket (STOMP) 개요
+
+MadCamp02는 **Spring WebSocket (STOMP)**를 사용하여 실시간 주가 데이터를 클라이언트에 전달합니다.
+
+**아키텍처 원칙**:
+- **서버 측**: Finnhub Trades WebSocket을 **단일 연결(API 키당 1개)**로 유지하고, 수신한 trade 메시지를 STOMP로 중계
+- **클라이언트 측**: 프론트엔드는 STOMP만 사용하며, 외부 WebSocket(Finnhub)에 직접 연결하지 않음
+- **보안**: Finnhub API 키는 서버에서만 사용하며, 프론트엔드로 노출하지 않음
+
+### 10.2 STOMP 엔드포인트 및 토픽
+
+#### 엔드포인트
+
+- **WebSocket Endpoint**: `/ws-stomp`
+- **프로토콜**: STOMP over WebSocket (SockJS fallback 지원)
+
+#### 구독 가능한 토픽
+
+| 토픽 패턴 | 설명 | 사용 시나리오 |
+|---------|------|-------------|
+| `/topic/stock.indices` | 시장 지수 업데이트 (10초 주기) | Market 페이지 (향후 구현) |
+| `/topic/stock.ticker.{ticker}` | 개별 종목 체결가/호가 (실시간) | Trade 페이지 진입 시 구독 |
+| `/user/queue/trade` | 사용자 개인 주문 체결 알림 | 전역 구독 (향후 구현) |
+
+**토픽 구독 전략**:
+- **동적 구독**: 사용자가 종목 상세 페이지(`/trade`) 진입 시에만 해당 종목 구독
+- **LRU 기반 해제**: 백엔드에서 Finnhub WebSocket 50 Symbols 제한으로 인해, 현재 아무도 보고 있지 않은 종목은 자동으로 구독 해제됨
+- **프론트엔드 동작**: 페이지 이탈 시 명시적 구독 해제(`UNSUBSCRIBE`) 권장
+
+### 10.3 STOMP 메시지 Payload 스키마
+
+#### `/topic/stock.ticker.{ticker}` Payload
+
+**스키마**:
+
+```json
+{
+  "ticker": "string",
+  "price": "number",
+  "ts": "number",
+  "volume": "number",
+  "source": "string (optional)",
+  "rawType": "string (optional)",
+  "conditions": "string[] (optional)"
+}
+```
+
+**필드 설명**:
+
+| 필드 | 타입 | 설명 |
+|-----|------|------|
+| `ticker` | string | 종목 심볼 (예: `AAPL`, `BINANCE:BTCUSDT`, `IC MARKETS:1`) |
+| `price` | number | 최신 체결가 (Last Price) |
+| `ts` | number | UNIX 타임스탬프 (밀리초) |
+| `volume` | number | 거래량 (trade 미지원 시 `0` 가능) |
+| `source` | string (optional) | 데이터 출처 (기본값: `"FINNHUB"`) |
+| `rawType` | string (optional) | Finnhub 원본 메시지 타입 (예: `"trade"`) |
+| `conditions` | string[] (optional) | 거래 조건 코드 리스트 (Finnhub `c` 필드) |
+
+**예시 JSON**:
+
+```json
+{
+  "ticker": "AAPL",
+  "price": 195.12,
+  "ts": 1705672800000,
+  "volume": 1000,
+  "source": "FINNHUB",
+  "rawType": "trade",
+  "conditions": []
+}
+```
+
+**Price Update (Trade 미지원 시)**:
+
+일부 forex/crypto 거래소에서는 trade 데이터를 제공하지 않을 수 있습니다. 이 경우 `volume=0`인 price update가 전송됩니다:
+
+```json
+{
+  "ticker": "BINANCE:BTCUSDT",
+  "price": 7296.89,
+  "ts": 1705672800000,
+  "volume": 0,
+  "source": "FINNHUB",
+  "rawType": "trade"
+}
+```
+
+### 10.4 Ticker 심볼 형식 및 Destination 안전성
+
+**지원하는 심볼 형식**:
+
+- **US 주식**: `AAPL`, `MSFT`, `GOOGL` 등
+- **Crypto**: `BINANCE:BTCUSDT`, `BINANCE:ETHUSDT` 등
+- **Forex**: `IC MARKETS:1`, `OANDA:EUR_USD` 등 (공백/콜론 포함 가능)
+
+**STOMP Destination 처리 규칙**:
+
+- **Destination 패턴**: `/topic/stock.ticker.{ticker}`
+- **현재 구현 정책 (Phase 6)**: 
+  - Ticker 문자열을 그대로 사용합니다 (`StompDestinationUtils.createDestination()` 사용)
+  - 공백/특수문자가 포함된 ticker(예: `IC MARKETS:1`)의 경우, STOMP destination은 그대로 `/topic/stock.ticker.IC MARKETS:1` 형식이 됩니다
+  - 프론트엔드/백엔드 모두에서 이 형식을 그대로 처리합니다
+- **향후 확장 가능성**: 
+  - URL 인코딩이 필요한 경우 `StompDestinationUtils.createEncodedDestination()` 메서드를 사용할 수 있습니다
+  - 예: `IC MARKETS:1` → `/topic/stock.ticker.IC%20MARKETS%3A1`
+  - 현재는 인코딩 없이 사용하며, STOMP 프로토콜이 이를 지원합니다
+
+### 10.5 Finnhub WebSocket 제약사항
+
+#### 구독 제한
+
+- **최대 동시 구독**: 50 Symbols
+- **해결 전략**: Dynamic Subscription Manager (LRU 기반)로 자동 관리
+  - 50개 초과 시 가장 오래된 비활성 종목을 자동 해제
+  - 모든 종목이 활성 상태면 신규 구독을 거부(Skip)
+
+#### Trade 미지원 거래소/브로커
+
+**Forex 브로커 (스트리밍 미지원)**:
+- FXCM
+- Forex.com
+- FHFX
+
+**대체 방법**: 위 브로커의 경우, 실시간 스트리밍 대신 다음 REST API를 사용하세요:
+- Forex Candles API: `GET /api/v1/stock/candles/{ticker}`
+- All Rates API: (향후 구현)
+
+**Crypto/Forex Trade 미지원**:
+- 일부 거래소에서는 trade 데이터를 제공하지 않을 수 있습니다
+- 이 경우 `volume=0`인 price update가 전송됩니다
+- 클라이언트는 `volume=0`을 감지하여 "Price Update Only" 상태로 표시할 수 있습니다
+
+### 10.6 메시지 처리 흐름
+
+```mermaid
+sequenceDiagram
+    participant Finnhub as Finnhub WS
+    participant Backend as Backend (Spring)
+    participant Redis as Redis Cache
+    participant STOMP as STOMP Broker
+    participant Frontend as Frontend Client
+    
+    Finnhub->>Backend: Trade Message (type:"trade", data[])
+    Backend->>Backend: Parse & Normalize
+    Backend->>Redis: SET stock:price:{ticker}
+    Backend->>STOMP: SEND /topic/stock.ticker.{ticker}
+    STOMP->>Frontend: STOMP MESSAGE (last price update)
+```
+
+**처리 단계**:
+
+1. **Finnhub WebSocket 수신**: 백엔드가 Finnhub에서 trade 메시지 수신
+2. **파싱 및 정규화**: JSON 파싱 후 표준 payload 형식으로 변환
+3. **Redis 캐시 업데이트**: 최신가를 `stock:price:{ticker}` 키로 저장
+4. **STOMP 브로드캐스트**: `/topic/stock.ticker.{ticker}` 토픽으로 모든 구독자에게 전송
+5. **프론트엔드 수신**: STOMP 클라이언트가 메시지를 받아 UI 업데이트
+
+### 10.7 에러 처리 및 재연결
+
+**연결 실패 시**:
+- 백엔드는 **지수 백오프(Exponential Backoff)** 전략으로 재연결 시도
+- 재연결 성공 시 현재 구독 풀의 모든 심볼을 자동으로 재구독
+
+**메시지 파싱 실패 시**:
+- 알 수 없는 타입 또는 빈 `data` 배열은 무시하고 디버그 로그만 기록
+- 파싱 오류가 발생해도 다른 정상 메시지 처리는 계속 진행
+
+**구독 실패 시**:
+- 50 Symbols 제한 초과로 신규 구독이 거부되면, 클라이언트는 기존 데이터(Redis 캐시 또는 REST API)를 사용
+
+---
+
 ## 13. 데이터 전략 (Phase 3+)
 
 ### 13.1 외부 API 제한 및 대응 전략
@@ -1139,5 +1315,5 @@ CREATE TABLE api_usage_logs (
 
 ---
 
-**문서 버전:** 2.7.12 (Phase 5 완료 + Phase 5.5 프론트 연동·DB 제약 보강 실행 및 Game/Shop/Ranking 정합성 반영)  
+**문서 버전:** 2.7.13 (Phase 6: 실시간 통신 스펙 추가 및 Finnhub WebSocket 제약사항 정합화)  
 **최종 수정일:** 2026-01-19

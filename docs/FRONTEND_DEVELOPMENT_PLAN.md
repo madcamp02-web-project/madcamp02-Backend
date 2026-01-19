@@ -1,6 +1,6 @@
 # 🎨 MadCamp02: 프론트엔드 개발 계획서
 
-**Ver 2.7.11 - Frontend Development Blueprint (Spec-Driven Alignment)**
+**Ver 2.7.12 - Frontend Development Blueprint (Spec-Driven Alignment)**
 
 ---
 
@@ -23,6 +23,7 @@
 | **2.7.9** | **2026-01-19** | **Phase 4: Trade/Portfolio Engine 완전 구현 및 문서 통합 (트랜잭션/락 전략, 다이어그램 포함)** | **MadCamp02** |
 | **2.7.10** | **2026-01-19** | **Phase 5 백엔드 구현 완료 연동 안내(Shop/Gacha/Inventory/Ranking)** | **MadCamp02** |
 | **2.7.11** | **2026-01-19** | **프론트 2.7.11 스냅샷 + Phase 5 완료 기반 “Phase 5.5: 프론트 연동·DB 제약 보강” 체크리스트 고정(Shop/Gacha/Inventory/Ranking 실데이터 전환, `{items:[]}`·카테고리/ETF/STOMP 정합성 재확인)** | **MadCamp02** |
+| **2.7.12** | **2026-01-19** | **백엔드 Phase 4~6 구현 기준 Trade/Portfolio/Game/Realtime(WebSocket) DTO·에러 처리·토픽/endpoint 문구를 FULL_SPEC 및 BACKEND 계획서와 정합하게 보정** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 

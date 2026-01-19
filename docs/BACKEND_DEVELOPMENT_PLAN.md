@@ -1,6 +1,6 @@
 # ⚙️ MadCamp02: 백엔드 개발 계획서
 
-**Ver 2.7.12 - Backend Development Blueprint (Spec-Driven Alignment)**
+**Ver 2.7.14 - Backend Development Blueprint (Spec-Driven Alignment)**
 
 ---
 
@@ -29,6 +29,8 @@
 | **2.7.10** | **2026-01-19** | **Phase 5: Game/Shop/Ranking API 구현 완료 (가챠/인벤토리/장착/랭킹)** | **MadCamp02** |
 | **2.7.11** | **2026-01-19** | **프론트 2.7.11 스냅샷 반영, Phase 5 완료 상태 기반 “Phase 5.5: 프론트 연동·DB 제약 보강” 계획 추가(Shop/Gacha/Inventory/Ranking 실데이터 전환, `{items:[]}`·카테고리/ETF/STOMP 정합성 고정)** | **MadCamp02** |
 | **2.7.12** | **2026-01-19** | **Phase 5.5 실행: Game/Shop/Inventory/Ranking 에러 코드·DB 제약·프론트 연동 가이드 최종 반영(GAME_001~003, items.category CHECK, is_ranking_joined 필터 검증)** | **MadCamp02** |
+| **2.7.13** | **2026-01-19** | **Phase 6 실행: Finnhub Trades WebSocket 연동 완료 - 싱글톤 클라이언트, 메시지 파싱/정규화, Redis/STOMP 브로드캐스트, destination 안전성 정책 고정** | **MadCamp02** |
+| **2.7.14** | **2026-01-19** | **Phase 4~6 구현 코드 기준 Game/Trade/Realtime(WebSocket) 정합성 재정리 및 상태 테이블/페이로드·destination 설명 보완** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -394,9 +396,9 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
 | **Auth**   | 100%   | ✅ Complete    | Hybrid 인증 인터페이스(Backend/Frontend Driven) 확정. 프론트 `/oauth/callback` 및 토큰 저장/갱신 연동은 Phase 1에서 진행. |
 | **User**   | 80%    | ⚠️ Update Req  | 기본 엔티티 존재하나 `is_public` 등 신규 필드 누락됨.                                                                     |
 | **Market** | 0%     | ⬜ Pending     | Controller/Service 미구현.                                                                                                |
-| **Trade**  | 10%    | 🚧 In Progress | 엔티티(`TradeLog`) 존재, 로직 미구현.                                                                                     |
+| **Trade**  | 100%   | ✅ Complete    | Phase 4: Trade/Portfolio Engine 완전 구현(트랜잭션/비관적 락, 동시성 테스트 포함).                                         |
 | **Game**   | 100%   | ✅ Complete    | Phase 5 구현 완료(Shop/Gacha/Inventory/Ranking). 프론트는 현재 모의데이터 상태이므로 Phase 5.5에서 실데이터 연동 필요.    |
-| **Realtime**| 50%   | 🚧 In Progress | Phase 5.6(구독 관리자) 구현 완료. Phase 6(Finnhub 연결/핸들러) 대기 중.                                                   |
+| **Realtime**| 90%   | 🚧 In Progress | Phase 5.6(구독 관리자) + Phase 6(Finnhub Trades WebSocket/Redis/STOMP 브로드캐스트) 구현 완료. `/topic/stock.indices`, `/user/queue/trade`는 향후 구현. |
 | **AI**     | 0%     | ⬜ Pending     | FastAPI 연동 미구현.                                                                                                      |
 
 ---
@@ -726,13 +728,28 @@ sequenceDiagram
   - LRU 기반 자동 해제: 50개 초과 시 가장 오래된 비활성 종목 해제
 - **이벤트 훅**: STOMP Subscribe/Unsubscribe 이벤트(`@EventListener`)에서 Manager 호출
 
-### 12.7 Phase 6: 실시간(STOMP) + 알림(선택/후순위)
+### 12.7 Phase 6: 실시간(STOMP) + Finnhub WebSocket 연동 (구현 완료)
 
-- **구현 대상**: `WebSocketConfig`, Stock broadcast/Trade notification handler
-- **토픽(프론트 문서 기준)**:
-  - `/topic/stock.indices`
-  - `/topic/stock.ticker.{ticker}`
-  - `/user/queue/trade`
+**구현 일자**: 2026-01-19
+
+**구현 내용**:
+- ✅ `FinnhubTradesWebSocketClient`: Finnhub Trades WebSocket 싱글톤 클라이언트 구현
+  - API 키당 1개 연결 보장
+  - 지수 백오프 재연결 전략
+  - 구독 버퍼링 및 재구독 지원 (active/pending 구독 세트 관리)
+- ✅ `TradePriceBroadcastService`: Trade 메시지 정규화 및 브로드캐스트 서비스
+  - Redis 캐시 업데이트 (`stock:price:{ticker}`, TTL 24시간)
+  - STOMP 브로드캐스트 (`/topic/stock.ticker.{ticker}`)
+  - Payload 스키마: `ticker`, `price`, `ts`, `volume`, `source="FINNHUB"`, `rawType="trade"`, `conditions[]` (volume=0인 price update도 허용)
+- ✅ `FinnhubClient.subscribe/unsubscribe`: 실제 WebSocket 메시지 전송으로 연결
+- ✅ `StompDestinationUtils`: STOMP destination 생성/파싱 유틸리티 (`/topic/stock.ticker.{ticker}` 생성, 공백/콜론 포함 ticker 지원)
+- ✅ 메시지 파싱: 다건 trade, `v=0` 업데이트, 예외 처리
+- ✅ 테스트: 단위 테스트 및 통합 테스트 작성
+
+**토픽(프론트 문서 기준)**:
+- `/topic/stock.indices` (향후 구현)
+- `/topic/stock.ticker.{ticker}` (구현 완료)
+- `/user/queue/trade` (향후 구현)
 
 ### 12.8 Phase 7: AI(SSE) 연동 (프론트 `/oracle`)
 
@@ -911,7 +928,7 @@ sequenceDiagram
 
 ---
 
-**문서 버전:** 2.7.12 (Phase 5 완료 + Phase 5.5 Game/Shop/Inventory/Ranking 프론트 연동·DB 제약 보강 실행 반영)  
+**문서 버전:** 2.7.13 (Phase 6: Finnhub WebSocket 연동 완료)  
 **최종 수정일:** 2026-01-19
 
 ---
