@@ -10,6 +10,8 @@ import java.util.List;
 @Getter
 @Builder
 public class InventoryResponse {
+    // 응답 기준 시점 (프론트에서 메타데이터로 사용)
+    private String asOf;
     private List<Item> items;
 
     @Getter

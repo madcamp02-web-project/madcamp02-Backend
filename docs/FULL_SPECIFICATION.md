@@ -1,6 +1,6 @@
 # 📁 MadCamp02: 최종 통합 명세서
 
-**Ver 2.7.8 - Complete Edition (Spec-Driven Alignment)**
+**Ver 2.7.12 - Complete Edition (Spec-Driven Alignment)**
 
 ---
 
@@ -26,6 +26,9 @@
 | **2.7.7** | **2026-01-19** | **EODHD 무료 구독 제한(최근 1년) 주의사항 추가, 외부 API 확장 전략(13.3) 추가** | **MadCamp02** |
 | **2.7.8** | **2026-01-19** | **지수 조회를 ETF로 변경 (Finnhub Quote API는 지수 심볼 미지원) - SPY, QQQ, DIA 사용** | **MadCamp02** |
 | **2.7.9** | **2026-01-19** | **Phase 4: Trade/Portfolio Engine 완전 구현 및 문서 통합 (트랜잭션/락 전략, 다이어그램 포함)** | **MadCamp02** |
+| **2.7.10** | **2026-01-19** | **Phase 5: Game/Shop/Ranking API 구현 완료 (가챠/인벤토리/장착/랭킹)** | **MadCamp02** |
+| **2.7.11** | **2026-01-19** | **프론트 2.7.11 스냅샷 반영: Phase 5 완료 기반 “Phase 5.5: 프론트 연동·DB 제약 보강” 추가(Shop/Gacha/Inventory/Ranking 실데이터 전환 체크리스트, `{items:[]}`·카테고리/ETF/STOMP 정합성 재확인)** | **MadCamp02** |
+| **2.7.12** | **2026-01-19** | **Phase 5.5 실행: `/api/v1/game/*` 응답 DTO/에러 코드(GAME_001~003)·items.category CHECK 제약·랭킹 필터(is_ranking_joined) 구현 상태를 스펙과 최종 정합화** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -817,6 +820,48 @@ sequenceDiagram
 | PUT    | `/equip/{itemId}` | 아이템 장착/해제 토글              |
 | GET    | `/ranking`        | 유저 랭킹 조회                     |
 
+#### 5.5.1 Items (`GET /api/v1/game/items`)
+- Query: `category`(optional, NAMEPLATE|AVATAR|THEME)
+- Response: `{ asOf, items: [{ itemId, name, category, rarity, probability, imageUrl, description }] }`
+
+#### 5.5.2 Gacha (`POST /api/v1/game/gacha`)
+- 비용: 100 게임 코인 차감 (`wallet.game_coin`)
+- 동작: 확률 기반 추첨 → 이미 보유한 아이템이면 최대 10회 재추첨 → 모두 중복이면 `GAME_002`
+- Response: `{ itemId, name, category, rarity, imageUrl, remainingCoin }`
+- 에러:
+  - `GAME_001` 코인 부족
+  - `GAME_003` 가챠 대상 아이템 없음
+  - `GAME_002` 재추첨 실패(모두 중복)
+
+#### 5.5.3 Inventory (`GET /api/v1/game/inventory`)
+- Response 예시 상단 E) 참고 (`items` 배열, equipped 포함)
+
+#### 5.5.4 Equip Toggle (`PUT /api/v1/game/equip/{itemId}`)
+- 카테고리별 단일 장착 보장: 같은 카테고리에 다른 아이템이 장착되어 있으면 자동 해제 후 토글
+- Response: 인벤토리 전체(동일 스키마)
+- 에러: `GAME_003` 아이템 미보유
+
+#### 5.5.5 Ranking (`GET /api/v1/game/ranking`)
+- 대상: `is_ranking_joined = true` 사용자
+- 정렬: 총자산(`wallet.total_assets`) 내림차순, 최대 50명
+- 수익률 계산: `(totalAssets - 10000) / 10000 * 100`
+- Response 예시 상단 F) 참고 (`asOf`, `items`, `my`)
+
+### 5.6 Phase 5.5: 프론트 연동·DB 제약 보강 (Shop/Gacha/Inventory/Ranking)
+
+- **프론트 현재 상태(Ver 2.7.11)**: `/shop`·`/gacha`·`/ranking`·`/mypage`는 모의데이터/상수 기반으로 렌더링되며 Axios/STOMP/SSE 미연결.
+- **실데이터 전환 체크리스트**:
+  - `/api/v1/game/items` → 상점/확률 카드: `{ "items": [...] }` 패턴, 카테고리 `NAMEPLATE|AVATAR|THEME`만 허용
+  - `/api/v1/game/gacha` → 가챠 실행: 중복만 존재 시 `GAME_002` 처리, 코인 차감/결과 UI 동기화
+  - `/api/v1/game/inventory`, `/api/v1/game/equip/{itemId}` → 인벤토리 조회·장착 단일성 반영(기존 장착 자동 해제)
+  - `/api/v1/game/ranking` → 랭킹/참여 토글: `is_ranking_joined` 필터 적용 상태 유지
+- **DB/제약 재확인**:
+  - `items.category`는 Flyway V3 기준 `NAMEPLATE/AVATAR/THEME` 외 값 존재 시 마이그레이션 실패(Fail Fast) + `CHECK` 제약 권장
+  - 모든 리스트 응답은 `{items:[...]}` 패턴 유지, 필요 시 `asOf` 메타 포함
+- **실시간/지표 정합성**:
+  - STOMP 엔드포인트 `/ws-stomp` 고정
+  - 지수 데이터는 ETF(SPY/QQQ/DIA) 사용 문구를 프론트/백엔드 문서 모두 동일하게 유지
+
 ---
 
 ## 6. 프론트엔드 구조
@@ -1094,5 +1139,5 @@ CREATE TABLE api_usage_logs (
 
 ---
 
-**문서 버전:** 2.7.10 (Phase 4 Trade/Portfolio Engine 완전 구현 및 트러블슈팅 반영)  
+**문서 버전:** 2.7.12 (Phase 5 완료 + Phase 5.5 프론트 연동·DB 제약 보강 실행 및 Game/Shop/Ranking 정합성 반영)  
 **최종 수정일:** 2026-01-19

@@ -1,6 +1,7 @@
 package com.madcamp02.domain.wallet;
 
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -35,4 +36,8 @@ public interface WalletRepository extends JpaRepository<Wallet, Long> {
 
     // 게임 코인 보유량 기준 조회
     List<Wallet> findByGameCoinGreaterThanOrderByGameCoinDesc(Integer minCoin);
+
+    // 랭킹 참여자 상위 목록 (is_ranking_joined = true)
+    @Query("SELECT w FROM Wallet w WHERE w.user.isRankingJoined = true ORDER BY w.totalAssets DESC")
+    List<Wallet> findRankingWallets(Pageable pageable);
 }

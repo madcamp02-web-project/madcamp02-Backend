@@ -302,4 +302,20 @@ public class FinnhubClient {
             super(message, cause);
         }
     }
+
+    //------------------------------------------
+    // WebSocket Subscription Methods (Phase 5.6)
+    //------------------------------------------
+    // 실제 Finnhub WebSocket 연결은 별도 구현 예정.
+    // 여기서는 Manager가 호출할 수 있는 인터페이스 제공.
+    //------------------------------------------
+    public void subscribe(String symbol) {
+        log.info("Finnhub WebSocket 구독 요청: {}", symbol);
+        // TODO: 실제 WebSocket 메시지 전송 로직 구현 {"type":"subscribe","symbol":"AAPL"}
+    }
+
+    public void unsubscribe(String symbol) {
+        log.info("Finnhub WebSocket 구독 해제 요청: {}", symbol);
+        // TODO: 실제 WebSocket 메시지 전송 로직 구현 {"type":"unsubscribe","symbol":"AAPL"}
+    }
 }

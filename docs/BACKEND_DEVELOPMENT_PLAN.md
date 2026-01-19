@@ -1,6 +1,6 @@
 # ⚙️ MadCamp02: 백엔드 개발 계획서
 
-**Ver 2.7.8 - Backend Development Blueprint (Spec-Driven Alignment)**
+**Ver 2.7.12 - Backend Development Blueprint (Spec-Driven Alignment)**
 
 ---
 
@@ -26,6 +26,9 @@
 | **2.7.7** | **2026-01-19** | **EODHD 무료 구독 제한(최근 1년) 주의사항 추가, 외부 API 확장 전략(Phase 9) 추가** | **MadCamp02** |
 | **2.7.8** | **2026-01-19** | **지수 조회를 ETF로 변경 (Finnhub Quote API는 지수 심볼 미지원) - SPY, QQQ, DIA 사용** | **MadCamp02** |
 | **2.7.9** | **2026-01-19** | **Phase 4: Trade/Portfolio Engine 완전 구현 및 문서 통합 (트랜잭션/락 전략, 다이어그램 포함)** | **MadCamp02** |
+| **2.7.10** | **2026-01-19** | **Phase 5: Game/Shop/Ranking API 구현 완료 (가챠/인벤토리/장착/랭킹)** | **MadCamp02** |
+| **2.7.11** | **2026-01-19** | **프론트 2.7.11 스냅샷 반영, Phase 5 완료 상태 기반 “Phase 5.5: 프론트 연동·DB 제약 보강” 계획 추가(Shop/Gacha/Inventory/Ranking 실데이터 전환, `{items:[]}`·카테고리/ETF/STOMP 정합성 고정)** | **MadCamp02** |
+| **2.7.12** | **2026-01-19** | **Phase 5.5 실행: Game/Shop/Inventory/Ranking 에러 코드·DB 제약·프론트 연동 가이드 최종 반영(GAME_001~003, items.category CHECK, is_ranking_joined 필터 검증)** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -392,7 +395,8 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
 | **User**   | 80%    | ⚠️ Update Req  | 기본 엔티티 존재하나 `is_public` 등 신규 필드 누락됨.                                                                     |
 | **Market** | 0%     | ⬜ Pending     | Controller/Service 미구현.                                                                                                |
 | **Trade**  | 10%    | 🚧 In Progress | 엔티티(`TradeLog`) 존재, 로직 미구현.                                                                                     |
-| **Game**   | 20%    | ⚠️ Update Req  | `Item` 엔티티 존재하나 Category Enum(`NAMEPLATE` 등) 업데이트 필요.                                                       |
+| **Game**   | 100%   | ✅ Complete    | Phase 5 구현 완료(Shop/Gacha/Inventory/Ranking). 프론트는 현재 모의데이터 상태이므로 Phase 5.5에서 실데이터 연동 필요.    |
+| **Realtime**| 50%   | 🚧 In Progress | Phase 5.6(구독 관리자) 구현 완료. Phase 6(Finnhub 연결/핸들러) 대기 중.                                                   |
 | **AI**     | 0%     | ⬜ Pending     | FastAPI 연동 미구현.                                                                                                      |
 
 ---
@@ -698,7 +702,22 @@ sequenceDiagram
   - `PUT /api/v1/game/equip/{itemId}`
   - `GET /api/v1/game/ranking` (랭킹 참여 토글 반영)
 
-### 12.6.1 Phase 5.5: WebSocket 구독 관리자 구현 (DATA_STRATEGY_PLAN 기반)
+### 12.6.1 Phase 5.5: 프론트 연동·DB 보강 (Shop/Gacha/Inventory/Ranking)
+
+- **목표**: Phase 5에서 구현된 Game/Shop/Ranking API를 프론트 2.7.11 실제 화면에 연결하고, DB/응답 제약을 단단히 고정
+- **연동 체크리스트 (프론트 상태: 전면 Mock → 실데이터 전환)**:
+  - `/api/v1/game/items` → 상점 목록/확률 카드 (카테고리 `NAMEPLATE|AVATAR|THEME` 고정, `{ items: [...] }` 패턴)
+  - `/api/v1/game/gacha` → 가챠 결과/코인 차감 UI (중복 시 재추첨 실패 코드 `GAME_002` 대응)
+  - `/api/v1/game/inventory` + `/api/v1/game/equip/{itemId}` → 인벤토리/장착 단일성 보장 UI
+  - `/api/v1/game/ranking` → 랭킹/참여 토글 연동 (`is_ranking_joined` 반영)
+- **DB/제약 보강**:
+  - `items.category`는 Flyway V3에서 레거시 매핑 + `CHECK (category IN ('NAMEPLATE','AVATAR','THEME'))` 제약까지 이미 적용되어 있으며, Unknown 값 존재 시 마이그레이션이 실패하도록 고정됨
+  - 응답 DTO는 `FULL_SPECIFICATION` 5.0/5.5 기준의 `items` 래퍼와(필요 시) `asOf` 필드를 유지해 프론트 연동 시 호환성 보장
+- **실시간/지표 정합성**:
+  - STOMP 엔드포인트 `/ws-stomp` 재확인(프론트 문서와 동일)
+  - 지수 데이터는 ETF(SPY/QQQ/DIA) 사용 문구를 프론트/스펙과 일치시켜 통신/캐싱 정책 혼선 제거
+
+### 12.6.2 Phase 5.6: WebSocket 구독 관리자 구현 (DATA_STRATEGY_PLAN 기반)
 
 - **구현 대상**: `StockSubscriptionManager` (Thread-safe)
 - **기능**:
@@ -892,5 +911,28 @@ sequenceDiagram
 
 ---
 
-**문서 버전:** 2.7.10 (Phase 4 Trade/Portfolio Engine 완전 구현 및 트러블슈팅 반영)  
+**문서 버전:** 2.7.12 (Phase 5 완료 + Phase 5.5 Game/Shop/Inventory/Ranking 프론트 연동·DB 제약 보강 실행 반영)  
 **최종 수정일:** 2026-01-19
+
+---
+
+## 13.3 Phase 5 구현 완료 현황 (Game/Shop/Ranking)
+
+**구현 일자**: 2026-01-19
+
+**구현 내용**:
+- ✅ `GameController` 신규 추가: `/items`, `/gacha`, `/inventory`, `/equip/{itemId}`, `/ranking`
+- ✅ `ItemsResponse`, `GachaResponse` DTO 추가 (`items` 패턴, asOf 포함)
+- ✅ `InventoryResponse`, `RankingResponse` DTO를 `FULL_SPECIFICATION` 5.5 스키마와 정합하게 정리(asOf/ items / my 구조 유지)
+- ✅ `GachaService` 구현: 게임 코인 100 차감 → 확률 기반 추첨 → 중복 시 재추첨(최대 10회) → 인벤토리 지급
+- ✅ `InventoryService` 구현: 카테고리 단일 장착 보장(기존 장착 자동 해제) + 인벤토리 조회
+- ✅ `RankingService` 구현: 랭킹 참여 사용자만 대상으로 총자산 내림차순 Top 50, 수익률 = (총자산-초기자산)/초기자산*100
+- ✅ `WalletRepository.findRankingWallets(Pageable)` 추가 (is_ranking_joined 필터)
+- ✅ 단위 테스트: 카테고리 검증, 장착 단일성, 랭킹 수익률 계산 검증
+
+**참고사항**:
+- 가챠 비용 기본값: 100 게임 코인 (`GachaService.GACHA_COST`)
+- 중복 아이템만 존재할 경우 `GAME_002` 발생
+- 응답 스키마는 `FULL_SPECIFICATION` 5.5와 정합
+
+---
