@@ -57,9 +57,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
+import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 //어노테이션에 대해서...
@@ -112,6 +114,7 @@ public class AuthService {
     private final RedisTemplate<String, String> redisTemplate; // Refresh Token을 저장할 메모리 DB(Redis) 도구
     private final PasswordEncoder passwordEncoder;   // 비밀번호를 안전하게 암호화(BCrypt)하고, 검증하는 도구
     private final RestTemplate restTemplate;         // 외부 API(Kakao 등)에 HTTP 요청을 보내는 도구
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom(); // 임의 이메일/닉네임 생성용
 
     //==========================================
     // 설정값 주입 (application.yml에서 가져옴)
@@ -191,6 +194,10 @@ public class AuthService {
             walletRepository.save(wallet); // DB에 지갑 저장 (INSERT)
             // 기본 관심종목 설정
             addDefaultWatchlist(user);
+        }
+
+        if (user == null) {
+            throw new AuthException(ErrorCode.AUTH_USER_NOT_FOUND);
         }
 
         // [4단계: 우리 앱 전용 토큰(JWT) 발급]
@@ -491,10 +498,13 @@ public class AuthService {
         String email = kakaoUserInfo.path("kakao_account").path("email").asText(null);
         String nickname = kakaoUserInfo.path("kakao_account").path("profile").path("nickname").asText(null);
 
-        // 이메일이 없으면 에러 (Kakao 앱에서 이메일 동의 필수)
-        if (email == null || email.isEmpty()) {
-            log.error("Kakao 계정에 이메일 정보 없음");
-            throw new AuthException(ErrorCode.AUTH_KAKAO_TOKEN_INVALID);
+        // 이메일을 요청하지 않으므로 응답이 없을 수 있다 → 임의 이메일 생성
+        if (email == null || email.isBlank()) {
+            email = generateKakaoEmail();
+        }
+        // 닉네임은 필수 동의로 받아오되, 누락 시 임의 닉네임 생성
+        if (nickname == null || nickname.isBlank()) {
+            nickname = generateKakaoNickname();
         }
 
         // [3단계: 기존 사용자 조회]
@@ -503,9 +513,14 @@ public class AuthService {
 
         // [4단계: 신규 회원가입 처리]
         if (isNewUser) {
+            // 동일 이메일이 존재하면 충돌 방지를 위해 새 임의 이메일 재생성
+            while (userRepository.findByEmail(email).isPresent()) {
+                email = generateKakaoEmail();
+            }
+
             user = User.builder()
                     .email(email)
-                    .nickname(nickname != null ? nickname : email.split("@")[0])
+                    .nickname(nickname)
                     .provider("KAKAO")  // Kakao로 가입
                     .build();
             user = userRepository.save(user);
@@ -518,6 +533,10 @@ public class AuthService {
 
             // 기본 관심종목 설정
             addDefaultWatchlist(user);
+        }
+
+        if (user == null) {
+            throw new AuthException(ErrorCode.AUTH_USER_NOT_FOUND);
         }
 
         // [5단계: JWT 토큰 발급]
@@ -671,5 +690,23 @@ public class AuthService {
             log.error("Kakao 사용자 정보 조회 실패", e);
             throw new AuthException(ErrorCode.AUTH_KAKAO_TOKEN_INVALID);
         }
+    }
+
+    /**
+     * 카카오 로그인용 임의 이메일을 생성한다.
+     * 규칙: kakao-{timestamp}-{random}@auth.madcamp02.local
+     */
+    private String generateKakaoEmail() {
+        long timestamp = System.currentTimeMillis();
+        int randomNumber = SECURE_RANDOM.nextInt(1_000_000); // 0~999999
+        return String.format("kakao-%d-%06d@auth.madcamp02.local", timestamp, randomNumber);
+    }
+
+    /**
+     * 카카오 로그인 시 닉네임이 없을 때 사용할 임의 닉네임을 생성한다.
+     */
+    private String generateKakaoNickname() {
+        int randomNumber = SECURE_RANDOM.nextInt(1_000_000); // 0~999999
+        return String.format("kakao-user-%06d", randomNumber);
     }
 }

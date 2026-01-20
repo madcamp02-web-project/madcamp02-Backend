@@ -1,6 +1,6 @@
 # 📁 MadCamp02: 최종 통합 명세서
 
-**Ver 2.7.15 - Complete Edition (Spec-Driven Alignment)**
+**Ver 2.7.17 - Complete Edition (Spec-Driven Alignment)**
 
 ---
 
@@ -32,6 +32,8 @@
 | **2.7.13** | **2026-01-19** | **Phase 6: 실시간 통신(10장) 추가 - STOMP 토픽/payload 스키마, Finnhub WebSocket 제약사항, ticker destination 안전성 정책 고정 (FinnhubTradesWebSocketClient/TradePriceBroadcastService/StompDestinationUtils 기준)** | **MadCamp02** |
 | **2.7.14** | **2026-01-19** | **Phase 3.6: 백엔드 Redis 캐싱 확장 (Market Indices/News/Movers) 및 프론트엔드 이중 캐싱 전략 수립** | **MadCamp02** |
 | **2.7.15** | **2026-01-19** | **5.3.1: Candles API 상세 명세 보강 (Request/Response DTO, 날짜 범위 필터링, period 필드, 배치 로드 전략 상세 설명 추가)** | **MadCamp02** |
+| **2.7.16** | **2026-01-19** | **Candles API 범위 필터링/배치 로드/Quota 처리 최종 고정 + 문서 하단 버전 정합성 수정(Phase 3.4/3.6 반영)** | **MadCamp02** |
+| **2.7.17** | **2026-01-20** | **Kakao OAuth 스코프를 `profile_nickname` 단일로 축소, 이메일 미동의 시 백엔드가 임의 이메일(`kakao-{timestamp}-{random}@auth.madcamp02.local`)을 생성·중복 검사 후 가입하도록 명시. 소셜 신규 로그인은 `isNewUser` 플래그를 통해 `/onboarding` 리다이렉트하도록 가이드(구글/카카오 공통).** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -1006,12 +1008,14 @@ MadCamp02는 유연한 연동을 위해 두 가지 인증 흐름을 모두 제�
 3.  **토큰 전달**: 백엔드가 프론트엔드의 `/oauth/callback`으로 리다이렉트하며 Query Parameter로 토큰 전달. _(프론트 라우트 구현: Phase 1)_
     - 예: `http://localhost:3000/oauth/callback?accessToken=...&isNewUser=true`
 4.  **세션 저장**: 프론트엔드에서 토큰 추출 후 스토리지 저장 및 `auth-store` 업데이트.
+5.  **Kakao 동의 스코프**: `profile_nickname` **단일 필수**로 요청한다. `account_email`은 요청하지 않으며, Kakao 응답에 이메일이 없을 경우 백엔드가 `kakao-{timestamp}-{random}@auth.madcamp02.local` 형식의 임의 이메일을 생성해 중복 검사 후 가입시킨다.
 
 #### B. Frontend-Driven (Mobile/SPA)
 
 1.  **토큰 획득**: 프론트엔드(앱)에서 카카오 SDK 등을 통해 Access Token 직접 획득.
 2.  **로그인 요청**: 프론트엔드가 `POST /api/v1/auth/oauth/kakao` 호출 (Body: `{ "accessToken": "..." }`).
 3.  **토큰 발급**: 백엔드 검증 후 JWT 응답.
+4.  **신규 가입 판단**: 백엔드 응답 `isNewUser == true`이면 프론트가 즉시 `/onboarding`으로 리다이렉트하여 `birthDate/birthTime/gender/calendarType/nickname`을 확정 입력한다(구글/카카오 공통).
 
 ---
 
@@ -1537,5 +1541,5 @@ CREATE TABLE api_usage_logs (
 
 ---
 
-**문서 버전:** 2.7.13 (Phase 6: 실시간 통신 스펙 추가 및 Finnhub WebSocket 제약사항 정합화)  
+**문서 버전:** 2.7.16 (Phase 6 + Candles/Redis 캐싱 정합성 반영)  
 **최종 수정일:** 2026-01-19
