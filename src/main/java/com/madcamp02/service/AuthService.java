@@ -59,6 +59,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.security.SecureRandom;
 import java.time.LocalDate;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -98,27 +99,26 @@ import java.util.concurrent.TimeUnit;
         효과: 메서드 시작할 때 트랜잭션을 열고, 끝날 때 커밋(저장)하거나 에러 나면 롤백(취소)하는 복잡한 코드를 스프링이 몰래 앞뒤로 끼워 넣어 줍니다.
 */
 
-
-@Slf4j //로그 찍는 기능(log)을 추가하는 어노테이션
+@Slf4j // 로그 찍는 기능(log)을 추가하는 어노테이션
 @Service // 스프링에게 "이건 비즈니스 로직을 담당하는 핵심 부품(Bean)이야"라고 알려주는 어노테이션
-@RequiredArgsConstructor //Lombak을 사용하겠다는 어노테이션
+@RequiredArgsConstructor // Lombak을 사용하겠다는 어노테이션
 public class AuthService {
 
     // 의존성 주입(DI) (생성자 주입 방식) = 이 서비스가 일하기 위해 필요한 다른 도구들)
-    //@RequiredArgsConstructor를 통해 userRepository 등 4개의 도구를 스프링으로부터 안전하게 받아옴
+    // @RequiredArgsConstructor를 통해 userRepository 등 4개의 도구를 스프링으로부터 안전하게 받아옴
 
-    private final UserRepository userRepository;      // DB에서 유저 정보를 찾거나 저장할 때 사용
-    private final WalletRepository walletRepository;  // 회원가입 시 지갑을 만들어주기 위해 사용
+    private final UserRepository userRepository; // DB에서 유저 정보를 찾거나 저장할 때 사용
+    private final WalletRepository walletRepository; // 회원가입 시 지갑을 만들어주기 위해 사용
     private final WatchlistRepository watchlistRepository; // 기본 관심종목을 저장하기 위해 사용
-    private final JwtTokenProvider jwtTokenProvider;  // JWT 토큰을 만들고, 검증하고, 해석하는 도구
+    private final JwtTokenProvider jwtTokenProvider; // JWT 토큰을 만들고, 검증하고, 해석하는 도구
     private final RedisTemplate<String, String> redisTemplate; // Refresh Token을 저장할 메모리 DB(Redis) 도구
-    private final PasswordEncoder passwordEncoder;   // 비밀번호를 안전하게 암호화(BCrypt)하고, 검증하는 도구
-    private final RestTemplate restTemplate;         // 외부 API(Kakao 등)에 HTTP 요청을 보내는 도구
-    private static final SecureRandom SECURE_RANDOM = new SecureRandom(); // 임의 이메일/닉네임 생성용
+    private final PasswordEncoder passwordEncoder; // 비밀번호를 안전하게 암호화(BCrypt)하고, 검증하는 도구
+    private final RestTemplate restTemplate; // 외부 API(Kakao 등)에 HTTP 요청을 보내는 도구
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom(); // 임의 이메일/닉네임/비밀번호 생성용
 
-    //==========================================
+    // ==========================================
     // 설정값 주입 (application.yml에서 가져옴)
-    //==========================================
+    // ==========================================
 
     // Google OAuth2 클라이언트 ID (토큰 검증용)
     @Value("${spring.security.oauth2.client.registration.google.client-id}")
@@ -132,24 +132,24 @@ public class AuthService {
     // Access Token을 헤더에 담아 GET 요청하면 사용자 정보(이메일, 닉네임 등)를 JSON으로 반환
     private static final String KAKAO_USER_INFO_URL = "https://kapi.kakao.com/v2/user/me";
 
-    //==========================================
+    // ==========================================
     // 로그인 처리
-    //==========================================
+    // ==========================================
     /**
      * Google OAuth2 로그인
      * 
      * 처리 과정:
-     *   1. Google ID Token 검증 (위변조 확인)
-     *   2. 이메일로 기존 사용자 조회
-     *   3. 신규 사용자면 자동 회원가입 + 지갑 생성
-     *   4. JWT Access Token + Refresh Token 발급
-     *   5. Refresh Token을 Redis에 저장
-     *   6. 응답 DTO 반환
+     * 1. Google ID Token 검증 (위변조 확인)
+     * 2. 이메일로 기존 사용자 조회
+     * 3. 신규 사용자면 자동 회원가입 + 지갑 생성
+     * 4. JWT Access Token + Refresh Token 발급
+     * 5. Refresh Token을 Redis에 저장
+     * 6. 응답 DTO 반환
      * 
      * @param request 로그인 요청 (provider, idToken)
      * @return 인증 응답 (토큰 + 사용자 정보)
      */
-    @Transactional //트렌젝션으로 건다.
+    @Transactional // 트렌젝션으로 건다.
     // 이 메서드 안의 모든 DB 작업(User저장, Wallet저장)은 하나로 묶음.
     // 하나라도 실패하면 모두 취소(Rollback)
     public AuthResponse login(LoginRequest request) {
@@ -170,20 +170,25 @@ public class AuthService {
 
         // [3단계: 신규 회원일 경우 처리 (회원가입 + 지갑생성)]
         if (isNewUser) {
-            //------------------------------------------
+            // ------------------------------------------
             // 신규 사용자 처리
-            //------------------------------------------
+            // ------------------------------------------
             // - 기본 정보로 User 엔티티 생성
             // - birthDate는 null (온보딩에서 입력)
             // - 초기 자금 $10,000로 Wallet 생성
 
+            // 소셜 로그인 사용자는 별도의 비밀번호를 사용하지 않지만,
+            // USER 테이블의 password 컬럼은 항상 null이 아니도록 임의 난수 비밀번호를 생성해 저장한다.
+            String socialRawPassword = generateRandomPassword();
+            String socialEncodedPassword = passwordEncoder.encode(socialRawPassword);
 
-            // User 객체를 생성(Builder 패턴에서 만들어둔거 사용)(이렇게 쉽게 사용하라고 domain파일 내부의 User.java에 객체의 메서드를 만든거다)
+            // User 객체를 생성(Builder 패턴에서 만들어둔거 사용)
             user = User.builder()
                     .email(email)
+                    .password(socialEncodedPassword)
                     .nickname(name != null ? name : email.split("@")[0])
                     .provider("GOOGLE")
-                    .birthDate(LocalDate.of(2000, 1, 1))  // 임시 기본값 (온보딩에서 수정)
+                    .birthDate(LocalDate.of(2000, 1, 1)) // 임시 기본값 (온보딩에서 수정)
                     .build();
             user = userRepository.save(user);
 
@@ -205,8 +210,7 @@ public class AuthService {
         String accessToken = jwtTokenProvider.createAccessToken(
                 user.getUserId(),
                 user.getEmail(),
-                user.getNickname()
-        );
+                user.getNickname());
         // Refresh Token: 재로그인용 긴 수명 토큰
         String refreshToken = jwtTokenProvider.createRefreshToken(user.getUserId());
 
@@ -223,8 +227,9 @@ public class AuthService {
         return AuthResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
-                .expiresIn(3600)  // 1시간 (초 단위)
+                .expiresIn(3600) // 1시간 (초 단위)
                 .userId(user.getUserId())
+                .birthDate(user.getBirthDate())
                 .email(user.getEmail())
                 .nickname(user.getNickname())
                 .sajuElement(user.getSajuElement())
@@ -236,22 +241,22 @@ public class AuthService {
                 .build();
     }
 
-    //==========================================
+    // ==========================================
     // 토큰 갱신 처리
-    //==========================================
+    // ==========================================
     /**
      * Refresh Token으로 새 토큰 발급
      * 
      * 보안 전략 - Token Rotation:
-     *   - Refresh Token 사용 시 새 Refresh Token도 함께 발급
-     *   - 기존 Refresh Token은 폐기
-     *   - 탈취된 토큰 재사용 방지
+     * - Refresh Token 사용 시 새 Refresh Token도 함께 발급
+     * - 기존 Refresh Token은 폐기
+     * - 탈취된 토큰 재사용 방지
      * 
      * @param refreshToken 갱신용 토큰
      * @return 새 토큰 + 사용자 정보
      */
     @Transactional(readOnly = true) // 여기서는 데이터를 조회만 하므로 readOnly=true로 성능을 높임
-    //이런식으로 @Transactional(readOnly = true) 적어주면 select 연산만 가능하게 할 수 있음
+    // 이런식으로 @Transactional(readOnly = true) 적어주면 select 연산만 가능하게 할 수 있음
     public AuthResponse refresh(String refreshToken) {
 
         // [1단계: 토큰 자체의 유효성 검사]
@@ -271,10 +276,10 @@ public class AuthService {
         // [3단계: 저장된 토큰과 비교 (보안 핵심)]
         Long userId = jwtTokenProvider.getUserId(refreshToken);
 
-        //------------------------------------------
+        // ------------------------------------------
         // 4단계: Redis 저장 토큰과 비교
         // Redis에 저장해둔 토큰을 가져옴
-        //------------------------------------------
+        // ------------------------------------------
         // 불일치 시 = 탈취된 토큰이거나 이미 사용된 토큰
         // Redis에 토큰이 없거나(이미 로그아웃됨), 클라이언트가 보낸 것과 다르면(탈취 의심) 에러!
         String savedToken = redisTemplate.opsForValue().get("refresh:" + userId);
@@ -287,19 +292,18 @@ public class AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AuthException("사용자를 찾을 수 없음"));
 
-        //------------------------------------------
+        // ------------------------------------------
         // 5단계: 새 Access Token 생성
         // 새 토큰 발급 (Rotation)
-        //------------------------------------------
+        // ------------------------------------------
         String newAccessToken = jwtTokenProvider.createAccessToken(
                 user.getUserId(),
                 user.getEmail(),
-                user.getNickname()
-        );
+                user.getNickname());
 
-        //------------------------------------------
+        // ------------------------------------------
         // 7단계: 새 Refresh Token 생성 (Rotation)
-        //------------------------------------------
+        // ------------------------------------------
         // ★ 중요: Refresh Token도 새로 발급. (RTR 방식)
         // 한 번 쓴 Refresh Token은 버리고 새걸 줘서 해킹 당했을 때 피해를 줄이기 위함
         // 기존 토큰 폐기, 새 토큰 저장
@@ -311,6 +315,7 @@ public class AuthService {
                 .refreshToken(newRefreshToken)
                 .expiresIn(3600)
                 .userId(user.getUserId())
+                .birthDate(user.getBirthDate())
                 .email(user.getEmail())
                 .nickname(user.getNickname())
                 .sajuElement(user.getSajuElement())
@@ -319,9 +324,9 @@ public class AuthService {
                 .build();
     }
 
-    //==========================================
+    // ==========================================
     // 로그아웃 처리
-    //==========================================
+    // ==========================================
     /**
      * 로그아웃
      * 
@@ -329,7 +334,7 @@ public class AuthService {
      * → 해당 토큰으로 더 이상 갱신 불가
      * 
      * 주의: Access Token은 만료될 때까지 여전히 유효
-     *       (Blacklist 구현 시 즉시 차단 가능)
+     * (Blacklist 구현 시 즉시 차단 가능)
      * 
      * @param userId 로그아웃할 사용자 ID
      */
@@ -339,20 +344,20 @@ public class AuthService {
         redisTemplate.delete("refresh:" + userId);
     }
 
-    //==========================================
+    // ==========================================
     // 일반 회원가입 처리
-    //==========================================
+    // ==========================================
     /**
      * 이메일/비밀번호 회원가입
      * 
      * 처리 과정:
-     *   1. 이메일 중복 확인 (이미 가입된 이메일인지)
-     *   2. 비밀번호 암호화 (BCrypt)
-     *   3. User 엔티티 생성 및 저장
-     *   4. Wallet 생성 (초기 자금 $10,000)
-     *   5. JWT Access Token + Refresh Token 발급
-     *   6. Refresh Token을 Redis에 저장
-     *   7. 응답 DTO 반환
+     * 1. 이메일 중복 확인 (이미 가입된 이메일인지)
+     * 2. 비밀번호 암호화 (BCrypt)
+     * 3. User 엔티티 생성 및 저장
+     * 4. Wallet 생성 (초기 자금 $10,000)
+     * 5. JWT Access Token + Refresh Token 발급
+     * 6. Refresh Token을 Redis에 저장
+     * 7. 응답 DTO 반환
      * 
      * @param request 회원가입 요청 (email, password, nickname)
      * @return 인증 응답 (토큰 + 사용자 정보)
@@ -375,9 +380,9 @@ public class AuthService {
         // provider는 "LOCAL" (일반 가입), password는 암호화된 값
         User user = User.builder()
                 .email(request.getEmail())
-                .password(encodedPassword)  // 암호화된 비밀번호 저장
+                .password(encodedPassword) // 암호화된 비밀번호 저장
                 .nickname(request.getNickname())
-                .provider("LOCAL")  // 일반 회원가입
+                .provider("LOCAL") // 일반 회원가입
                 .build();
         user = userRepository.save(user);
 
@@ -391,8 +396,7 @@ public class AuthService {
         String accessToken = jwtTokenProvider.createAccessToken(
                 user.getUserId(),
                 user.getEmail(),
-                user.getNickname()
-        );
+                user.getNickname());
         String refreshToken = jwtTokenProvider.createRefreshToken(user.getUserId());
 
         // [6단계: Redis에 Refresh Token 저장]
@@ -402,26 +406,39 @@ public class AuthService {
         return AuthResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
-                .expiresIn(3600)  // 1시간 (초 단위)
+                .expiresIn(3600) // 1시간 (초 단위)
                 .userId(user.getUserId())
+                .birthDate(user.getBirthDate())
                 .email(user.getEmail())
                 .nickname(user.getNickname())
-                .isNewUser(true)  // 신규 사용자
+                .isNewUser(true) // 신규 사용자
                 .build();
     }
 
-    //==========================================
+    // ------------------------------------------
+    // 소셜 계정용 임의 비밀번호 생성
+    // ------------------------------------------
+    // USER.password가 항상 null이 아니도록, 소셜 신규 계정에는
+    // 예측 불가능한 랜덤 문자열을 생성해 암호화된 값으로 저장한다.
+    // ------------------------------------------
+    private String generateRandomPassword() {
+        byte[] randomBytes = new byte[16];
+        SECURE_RANDOM.nextBytes(randomBytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
+    }
+
+    // ==========================================
     // 일반 로그인 처리 (이메일/비밀번호)
-    //==========================================
+    // ==========================================
     /**
      * 이메일/비밀번호 로그인
      * 
      * 처리 과정:
-     *   1. 이메일로 사용자 조회
-     *   2. 비밀번호 검증 (BCrypt matches)
-     *   3. JWT Access Token + Refresh Token 발급
-     *   4. Refresh Token을 Redis에 저장
-     *   5. 응답 DTO 반환
+     * 1. 이메일로 사용자 조회
+     * 2. 비밀번호 검증 (BCrypt matches)
+     * 3. JWT Access Token + Refresh Token 발급
+     * 4. Refresh Token을 Redis에 저장
+     * 5. 응답 DTO 반환
      * 
      * @param request 로그인 요청 (email, password)
      * @return 인증 응답 (토큰 + 사용자 정보)
@@ -445,8 +462,7 @@ public class AuthService {
         String accessToken = jwtTokenProvider.createAccessToken(
                 user.getUserId(),
                 user.getEmail(),
-                user.getNickname()
-        );
+                user.getNickname());
         String refreshToken = jwtTokenProvider.createRefreshToken(user.getUserId());
 
         // [4단계: Redis에 Refresh Token 저장]
@@ -458,6 +474,7 @@ public class AuthService {
                 .refreshToken(refreshToken)
                 .expiresIn(3600)
                 .userId(user.getUserId())
+                .birthDate(user.getBirthDate())
                 .email(user.getEmail())
                 .nickname(user.getNickname())
                 .sajuElement(user.getSajuElement())
@@ -466,24 +483,24 @@ public class AuthService {
                 .build();
     }
 
-    //==========================================
+    // ==========================================
     // Kakao OAuth2 로그인 처리
-    //==========================================
+    // ==========================================
     /**
      * Kakao OAuth2 로그인
      * 
      * 처리 과정:
-     *   1. Kakao Access Token으로 사용자 정보 API 호출
-     *   2. 응답에서 이메일, 닉네임 추출
-     *   3. 이메일로 기존 사용자 조회
-     *   4. 신규 사용자면 자동 회원가입 + 지갑 생성
-     *   5. JWT Access Token + Refresh Token 발급
-     *   6. Refresh Token을 Redis에 저장
-     *   7. 응답 DTO 반환
+     * 1. Kakao Access Token으로 사용자 정보 API 호출
+     * 2. 응답에서 이메일, 닉네임 추출
+     * 3. 이메일로 기존 사용자 조회
+     * 4. 신규 사용자면 자동 회원가입 + 지갑 생성
+     * 5. JWT Access Token + Refresh Token 발급
+     * 6. Refresh Token을 Redis에 저장
+     * 7. 응답 DTO 반환
      * 
      * Google OAuth와의 차이:
-     *   - Google: ID Token (JWT)을 직접 검증
-     *   - Kakao: Access Token으로 Kakao API 호출하여 사용자 정보 획득
+     * - Google: ID Token (JWT)을 직접 검증
+     * - Kakao: Access Token으로 Kakao API 호출하여 사용자 정보 획득
      * 
      * @param accessToken Kakao에서 발급받은 Access Token
      * @return 인증 응답 (토큰 + 사용자 정보)
@@ -497,7 +514,8 @@ public class AuthService {
 
         // [2단계: 사용자 정보 추출]
         // Kakao 응답 JSON에서 이메일과 닉네임 추출
-        // 응답 구조: { "kakao_account": { "email": "...", "profile": { "nickname": "..." } } }
+        // 응답 구조: { "kakao_account": { "email": "...", "profile": { "nickname": "..." }
+        // } }
         String email = kakaoUserInfo.path("kakao_account").path("email").asText(null);
         String nickname = kakaoUserInfo.path("kakao_account").path("profile").path("nickname").asText(null);
 
@@ -521,10 +539,14 @@ public class AuthService {
                 email = generateKakaoEmail();
             }
 
+            String socialRawPassword = generateRandomPassword();
+            String socialEncodedPassword = passwordEncoder.encode(socialRawPassword);
+
             user = User.builder()
                     .email(email)
+                    .password(socialEncodedPassword) // 비밀번호 추가
                     .nickname(nickname)
-                    .provider("KAKAO")  // Kakao로 가입
+                    .provider("KAKAO") // Kakao로 가입
                     .build();
             user = userRepository.save(user);
 
@@ -546,8 +568,7 @@ public class AuthService {
         String jwtAccessToken = jwtTokenProvider.createAccessToken(
                 user.getUserId(),
                 user.getEmail(),
-                user.getNickname()
-        );
+                user.getNickname());
         String refreshToken = jwtTokenProvider.createRefreshToken(user.getUserId());
 
         // [6단계: Redis에 Refresh Token 저장]
@@ -559,6 +580,7 @@ public class AuthService {
                 .refreshToken(refreshToken)
                 .expiresIn(3600)
                 .userId(user.getUserId())
+                .birthDate(user.getBirthDate())
                 .email(user.getEmail())
                 .nickname(user.getNickname())
                 .sajuElement(user.getSajuElement())
@@ -567,9 +589,9 @@ public class AuthService {
                 .build();
     }
 
-    //==========================================
+    // ==========================================
     // Private Helper Methods
-    //==========================================
+    // ==========================================
 
     /**
      * 신규 가입 사용자에게 기본 관심종목을 부여한다.
@@ -597,10 +619,10 @@ public class AuthService {
      * Google 공개키로 토큰 서명 검증
      * 
      * 검증 항목:
-     *   - 서명 유효성 (위변조 여부)
-     *   - 발급자 (accounts.google.com)
-     *   - 대상 (우리 앱의 Client ID)
-     *   - 만료 시간
+     * - 서명 유효성 (위변조 여부)
+     * - 발급자 (accounts.google.com)
+     * - 대상 (우리 앱의 Client ID)
+     * - 만료 시간
      * 
      * @param idToken Google에서 발급받은 ID Token
      * @return 토큰 Payload (이메일, 이름 등 포함)
@@ -610,8 +632,7 @@ public class AuthService {
             // 구글 라이브러리를 사용해 검증기(Verifier)를 세팅
             GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(
                     new NetHttpTransport(),
-                    GsonFactory.getDefaultInstance()
-            )
+                    GsonFactory.getDefaultInstance())
                     .setAudience(Collections.singletonList(googleClientId))
                     .build();
 
@@ -636,7 +657,7 @@ public class AuthService {
      * 값: Refresh Token 문자열
      * 만료: refreshTokenExpiration (7일)
      * 
-     * @param userId 사용자 ID
+     * @param userId       사용자 ID
      * @param refreshToken 저장할 Refresh Token
      */
     private void saveRefreshToken(Long userId, String refreshToken) {
@@ -648,8 +669,7 @@ public class AuthService {
                 "refresh:" + userId,
                 refreshToken,
                 refreshTokenExpiration,
-                TimeUnit.MILLISECONDS
-        );
+                TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -658,10 +678,10 @@ public class AuthService {
      * Kakao API 호출하여 사용자 정보 획득
      * 
      * API 정보:
-     *   - URL: https://kapi.kakao.com/v2/user/me
-     *   - Method: GET
-     *   - Header: Authorization: Bearer {access_token}
-     *   - Response: JSON (id, kakao_account, properties 등)
+     * - URL: https://kapi.kakao.com/v2/user/me
+     * - Method: GET
+     * - Header: Authorization: Bearer {access_token}
+     * - Response: JSON (id, kakao_account, properties 등)
      * 
      * @param accessToken Kakao에서 발급받은 Access Token
      * @return 사용자 정보 JSON (JsonNode)
@@ -671,7 +691,7 @@ public class AuthService {
         try {
             // HTTP 헤더 설정
             HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(accessToken);  // Authorization: Bearer {access_token}
+            headers.setBearerAuth(accessToken); // Authorization: Bearer {access_token}
             headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
 
             // HTTP 요청 엔티티 생성
@@ -682,8 +702,7 @@ public class AuthService {
                     KAKAO_USER_INFO_URL,
                     HttpMethod.GET,
                     entity,
-                    String.class
-            );
+                    String.class);
 
             // 응답 파싱
             ObjectMapper objectMapper = new ObjectMapper();

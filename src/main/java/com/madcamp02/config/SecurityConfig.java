@@ -64,8 +64,6 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -277,10 +275,4 @@ public class SecurityConfig {
     }
     // 로그인 로직(Service)에서 "이 ID/PW 맞는지 확인해줘"라고 시킬 때 사용하는 관리자를 스프링 빈으로 등록
 
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
-    // BCrypt라는 강력한 알고리즘으로 암호화(해싱)해 주는 도구를 등록합니다.
-    // "1234"를 입력하면 sdj2189dsa... 같은 난수로 바꿔줌
 }

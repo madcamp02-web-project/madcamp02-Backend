@@ -115,11 +115,15 @@ package com.madcamp02.controller;
 // API 엔드포인트: /api/v1/auth/*
 //======================================
 
+import com.madcamp02.domain.user.User;
+import com.madcamp02.domain.user.UserRepository;
 import com.madcamp02.dto.request.EmailLoginRequest;
 import com.madcamp02.dto.request.LoginRequest;
 import com.madcamp02.dto.request.RefreshRequest;
 import com.madcamp02.dto.request.SignupRequest;
 import com.madcamp02.dto.response.AuthResponse;
+import com.madcamp02.exception.ErrorCode;
+import com.madcamp02.exception.UserException;
 import com.madcamp02.security.CustomUserDetails;
 import com.madcamp02.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -144,6 +148,7 @@ public class AuthController {
 
     // AuthService 의존성 주입 (생성자 주입 방식)
     private final AuthService authService; //AuthService의 객체와 메서드들로 연결시켜주자
+    private final UserRepository userRepository;
 
     //------------------------------------------
     // 회원가입 API
@@ -298,25 +303,19 @@ public class AuthController {
     @Operation(summary = "현재 사용자 정보", description = "로그인된 사용자 정보 조회", security = @SecurityRequirement(name = "bearer-key"))
     @GetMapping("/me") // GET /me 요청 처리
     public ResponseEntity<AuthResponse> me(@AuthenticationPrincipal CustomUserDetails userDetails) {
-        // userDetails는 JwtAuthenticationFilter -> JwtTokenProvider -> CustomUserDetailsService를 통해
-        // DB에서 User 엔티티를 읽어온 뒤(CustomUserDetails로 감싼 뒤) 컨트롤러로 들어온 결과물
-        //
-        // 즉, "추가 DB 조회"를 하지 않아도 userDetails 안에는 이미 최신(조회 시점 기준)의
-        // 프로필 정보(사주/아바타 등)가 들어가 있게 됨
+        // 항상 DB에서 최신 사용자 정보를 조회하여 온보딩/프로필 상태가 반영되도록 한다.
+        User user = userRepository.findById(userDetails.getUserId())
+                .orElseThrow(() -> new UserException(ErrorCode.USER_NOT_FOUND));
 
-        // isNewUser의 의미:
-        // - 프론트가 온보딩 화면을 띄울지 말지 결정할 때,
-        //   hasCompletedOnboarding(user)와 함께 사용하는 힌트 값
-        // - 여기서는 도메인 헬퍼(User.hasCompletedOnboarding)를 통해
-        //   "온보딩 미완료 여부"를 기준으로 설정
-        boolean isNewUser = !userDetails.getUser().hasCompletedOnboarding();
+        boolean isNewUser = !user.hasCompletedOnboarding();
 
         return ResponseEntity.ok(AuthResponse.builder()
-                .userId(userDetails.getUserId())
-                .email(userDetails.getEmail())
-                .nickname(userDetails.getNickname())
-                .sajuElement(userDetails.getUser().getSajuElement())
-                .avatarUrl(userDetails.getUser().getAvatarUrl())
+                .userId(user.getUserId())
+                .birthDate(user.getBirthDate())
+                .email(user.getEmail())
+                .nickname(user.getNickname())
+                .sajuElement(user.getSajuElement())
+                .avatarUrl(user.getAvatarUrl())
                 .isNewUser(isNewUser)
                 .build());
     }

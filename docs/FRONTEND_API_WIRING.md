@@ -29,21 +29,97 @@
     - 소셜/OAuth: `/oauth/callback?accessToken&refreshToken&isNewUser → /api/v1/auth/me → needOnboarding = isNewUser === true || !hasCompletedOnboarding(user)`
     - 레이아웃 가드: 인증 상태에서 `hasCompletedOnboarding(user) === false` 이고 현재 경로가 `/onboarding`이 아니면 항상 `/onboarding`으로 `router.replace`
 
-## 3. 라우트별 핵심 매핑 (요약)
+## 3. 라우트별 핵심 매핑 (요약/상세)
 
-> 전체 라우트/스토어 매핑은 추후 테이블 형태로 확장할 예정이며, 여기서는 요청사항과 직접 관련된 `/calculator` 섹션을 우선 고정합니다.
+- **공통 참고**
+  - 라우트 구조 및 상태 관리는 `FRONTEND_DEVELOPMENT_PLAN.md` 4~6장을,
+  - 엔드포인트·DTO·에러 코드는 `FULL_SPECIFICATION.md` 5장을 단일 진실로 사용한다.
 
-- `/login`, `/signup`, `/oauth/callback`, `/onboarding`
+### 3.1 인증/온보딩 플로우 (`/login`, `/signup`, `/oauth/callback`, `/onboarding`)
+
+- **주요 파일**
+  - `app/login/page.tsx`
+  - `app/signup/page.tsx`
+  - `app/oauth/callback/page.tsx`
+  - `app/onboarding/page.tsx`
+  - `stores/auth-store.ts`, `stores/user-store.ts`
   - `lib/api/auth.ts`, `lib/api/user.ts`
-  - `/api/v1/auth/signup`, `/api/v1/auth/login`, `/api/v1/auth/oauth/kakao`, `/api/v1/auth/me`, `/api/v1/user/onboarding`
 
-- `/market`
+- **백엔드 엔드포인트**
+  - `POST /api/v1/auth/signup` — 일반 회원가입
+  - `POST /api/v1/auth/login` — 일반 로그인
+  - `POST /api/v1/auth/oauth/kakao`, `POST /api/v1/auth/oauth/google` — Frontend-Driven 소셜 로그인
+  - `GET /api/v1/auth/me` — 현재 사용자 + 온보딩 상태 확인
+  - `POST /api/v1/user/onboarding` — 온보딩/재온보딩 (정밀 사주 계산, idempotent)
+
+- **플로우 요약**
+  - **일반 회원가입 → 자동 로그인 → 온보딩 강제**
+    1. `/signup` 폼에서 `authApi.signup` → `POST /api/v1/auth/signup`.
+    2. 성공 시 같은 자격증명으로 `authApi.login` → `POST /api/v1/auth/login` 호출.
+    3. `auth-store.checkAuth()`가 `GET /api/v1/auth/me`를 호출해 `user`를 채움.
+    4. `hasCompletedOnboarding(user) === false`이면 `/onboarding`으로 `router.replace`.
+
+  - **소셜 로그인 (Kakao/Google)**
+    - **Backend-Driven (Web)**
+      1. `/login`에서 `window.location.href = {BACKEND_URL}/oauth2/authorization/kakao`.
+      2. 백엔드 `OAuth2SuccessHandler`가 로그인 완료 후 `/oauth/callback?accessToken&refreshToken&isNewUser`로 리다이렉트.
+      3. `/oauth/callback/page.tsx`:
+         - 쿼리에서 `accessToken`, `refreshToken`, `isNewUser` 추출.
+         - `auth-store.setTokens()`로 저장 후 `checkAuth()` 호출 → `GET /api/v1/auth/me`.
+         - `needOnboarding = isNewUser === "true" || !hasCompletedOnboarding(user)` 이면 `/onboarding`으로 이동, 아니면 대시보드(`/`)로 이동.
+
+    - **Frontend-Driven (앱/SPA)**
+      1. 클라이언트에서 Kakao/Google SDK로 토큰 획득.
+      2. `authApi.kakaoLogin({ accessToken })` → `POST /api/v1/auth/oauth/kakao`.
+      3. 응답의 `isNewUser`와 `/api/v1/auth/me` 결과를 조합해 `/onboarding` 강제 여부 결정.
+
+  - **온보딩/재온보딩 (`/onboarding`, `/mypage`)**
+    - 온보딩 페이지:
+      - 입력 필드: `nickname`, `birthDate`, `birthTime`, `gender`, `calendarType`.
+      - `userApi.submitOnboarding(body)` → `POST /api/v1/user/onboarding`.
+      - 성공 시:
+        - `auth-store.checkAuth()`로 `/api/v1/auth/me` 재조회,
+        - 이후 메인 라우트(`/`)로 이동.
+    - 마이페이지 재온보딩:
+      - 동일 DTO/스토어(`user-store.profile`)를 사용.
+      - “사주 다시 계산하기” 버튼이 같은 `submitOnboarding`을 호출.
+      - 성공 후 프로필/지갑/인벤토리를 재조회하여 화면 동기화.
+
+- **에러 처리**
+  - `ErrorResponse.error` 값이 `ONBOARDING_001~003`인 경우:
+    - `ONBOARDING_001`: 입력값 유효성 에러 → 필드 옆에 구체 메시지 표시.
+    - `ONBOARDING_002`: 음력/양력 변환 에러 → 상단에 “음력/윤달 선택을 다시 확인해 주세요” 안내.
+    - `ONBOARDING_003`: 일반 사주 계산 실패 → “일시적인 오류입니다. 잠시 후 다시 시도해주세요” 토스트.
+
+### 3.2 마켓/캐시 헤더 (`/market`)
+
+- **주요 파일**
+  - `app/(main)/market/page.tsx`
+  - `stores/stock-store.ts`
   - `lib/api/stock.ts`
-  - `/api/v1/market/indices`, `/api/v1/market/news`, `/api/v1/market/movers`
-  - Redis 캐시 + `X-Cache-*` 헤더 → `stock-store`의 캐시 메타로 반영
 
-- `/trade`, `/portfolio`, `/shop`, `/ranking`, `/mypage`, `/oracle`
-  - 기존 명세/코드와 동일 (Trade/Portfolio/Game/Ai API)
+- **백엔드 엔드포인트**
+  - `GET /api/v1/market/indices`
+  - `GET /api/v1/market/news`
+  - `GET /api/v1/market/movers`
+
+- **캐시 헤더 처리**
+  - 모든 Market API 응답 헤더:
+    - `X-Cache-Status`: `"HIT" | "MISS" | "STALE"`
+    - `X-Cache-Age`: `number`(초)
+    - `X-Data-Freshness`: `"FRESH" | "STALE" | "EXPIRED"`
+  - `lib/api/index.ts` Axios 응답 인터셉터에서:
+    - 헤더 값을 읽어 `stock-store.setBackendCacheMeta({ status, age, freshness })`로 저장.
+  - UI:
+    - 지수 카드/뉴스 리스트 상단에 “캐시 상태 배지” 표시 (예: `STALE`, `15s ago`).
+
+### 3.3 Trade/Portfolio/Game/AI (`/trade`, `/portfolio`, `/shop`, `/ranking`, `/mypage`, `/oracle`)
+
+- 이들 라우트는 기존 명세와 코드가 이미 세부적으로 맞춰져 있으므로, 이 문서에서는 **최소 매핑 정보**만 유지합니다.
+- 자세한 스키마/플로우는 다음 문서를 참조:
+  - 거래/포트폴리오: `FULL_SPECIFICATION.md` 5.3~5.4, `BACKEND_DEVELOPMENT_PLAN.md` 6.2~6.3
+  - 상점/랭킹: `FULL_SPECIFICATION.md` 5.5, `FRONTEND_DEVELOPMENT_PLAN.md` 5.6~5.7
+  - AI 도사: `FULL_SPECIFICATION.md` 5.6, `FRONTEND_DEVELOPMENT_PLAN.md` 5.8
 
 ## 4. `/calculator` 페이지 API 연결 명세
 
@@ -126,18 +202,6 @@ export async function getTax(params: {
     - `세율 (%)` 입력 → `taxRate = percent / 100`
   - 세금 탭:
     - `세율 (%)` 입력 → `taxRate = percent / 100`
-
-### 4.4 통화(currency) 처리 향후 계획
-
-- **현재 상태 (백엔드)**:
-  - `CalcDividendResponse.currency`, `CalcTaxResponse.currency` 필드는 존재하지만,
-  - `CalcService`에서는 아직 통화/환율 전략을 도입하지 않았으므로 **항상 `null`** 로 내려보냄.
-- **향후 확장 계획**:
-  - `/api/v1/calc/dividend|tax`에 `currency` 쿼리 파라미터를 추가 (`USD`, `KRW` 등).
-  - 서버에서 Wallet/Portfolio의 통화 단위를 기준으로 일관된 계산을 수행하고, 응답 DTO의 `currency` 필드를 실제 값으로 채움.
-  - 프론트에서는:
-    - `currency` 값에 따라 금액 표시 포맷(소수점/단위/심볼)을 조정.
-    - 통화 선택 드롭다운(예: `USD`, `KRW`)을 `calculator` 페이지에 추가하고, 선택값을 쿼리 파라미터로 전달.
 
 ## 5. 유지보수 원칙
 

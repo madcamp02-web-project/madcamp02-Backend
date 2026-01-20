@@ -20,6 +20,8 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -55,7 +57,10 @@ public class UserOnboardingRequest {
     // 주의:
     // - 시간을 모르면 null로 보내면 서버에서 00:00:00으로 자동 설정
     //------------------------------------------
-    @Pattern(regexp = "^([01]\\d|2[0-3]):[0-5]\\d$", message = "birthTime은 HH:mm 형식이어야 합니다.")
+    @Pattern(
+            regexp = "^$|^([01]\\d|2[0-3]):[0-5]\\d$",
+            message = "birthTime은 비워두거나 HH:mm 형식이어야 합니다."
+    )
     private String birthTime;
 
     //------------------------------------------
@@ -81,6 +86,8 @@ public class UserOnboardingRequest {
     //------------------------------------------
     // null이면 00:00:00 반환
     //------------------------------------------
+    @JsonIgnore
+    @Schema(hidden = true)
     public LocalTime getBirthTimeAsLocalTime() {
         if (birthTime == null || birthTime.isEmpty()) {
             return LocalTime.of(0, 0); // 기본값 0시 정각

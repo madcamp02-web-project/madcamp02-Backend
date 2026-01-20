@@ -28,49 +28,57 @@ VALUES
 -- --------------------------------------------
 -- 2. 사용자 (users) - 10명 샘플
 -- --------------------------------------------
+-- 테스트용 공통 비밀번호 안내:
+--   - 평문 비밀번호(Plain): Password123!
+--   - BCrypt 해시(Hash): $2b$12$uYvA1l2MOfpxADu6mLvjiO/QxCzYBiaSv2wme.ntnqO8wPx8s4VqK
+-- 
+-- Spring Security의 BCryptPasswordEncoder는 2a/2b 모두 검증 가능하므로,
+-- 위 해시를 그대로 password 컬럼에 넣으면
+--   이메일 + Password123!
+-- 조합으로 실제 로그인 테스트가 가능하다.
 INSERT INTO users (email, password, nickname, provider, birth_date, saju_element, zodiac_sign, avatar_url,
                    is_public, is_ranking_joined, birth_time, gender, calendar_type)
 VALUES
-    ('local_user1@example.com',  '$2a$10$abcdefghijklmnopqrstuv', 'LocalUser1',  'LOCAL',
+    ('local_user1@example.com',  '$2b$12$uYvA1l2MOfpxADu6mLvjiO/QxCzYBiaSv2wme.ntnqO8wPx8s4VqK', 'LocalUser1',  'LOCAL',
      '1995-01-10', 'FIRE',  '쥐', 'https://example.com/avatars/user1.png',  TRUE, TRUE, '08:30:00', 'MALE',   'SOLAR'),
-    ('local_user2@example.com',  '$2a$10$abcdefghijklmnopqrstuv', 'LocalUser2',  'LOCAL',
+    ('local_user2@example.com',  '$2b$12$uYvA1l2MOfpxADu6mLvjiO/QxCzYBiaSv2wme.ntnqO8wPx8s4VqK', 'LocalUser2',  'LOCAL',
      '1993-03-21', 'WATER', '소',  'https://example.com/avatars/user2.png',  TRUE, TRUE, '14:15:00', 'FEMALE', 'SOLAR'),
-    ('google_user1@example.com', NULL,                               'GUser1',      'GOOGLE',
+    ('google_user1@example.com', '$2b$12$uYvA1l2MOfpxADu6mLvjiO/QxCzYBiaSv2wme.ntnqO8wPx8s4VqK',    'GUser1',      'GOOGLE',
      '1990-07-15', 'WOOD',  '호랑이', 'https://example.com/avatars/user3.png',  TRUE, TRUE, '12:00:00', 'MALE',   'SOLAR'),
-    ('google_user2@example.com', NULL,                               'GUser2',      'GOOGLE',
+    ('google_user2@example.com', '$2b$12$uYvA1l2MOfpxADu6mLvjiO/QxCzYBiaSv2wme.ntnqO8wPx8s4VqK',    'GUser2',      'GOOGLE',
      '1988-11-02', 'GOLD',  '토끼',   'https://example.com/avatars/user4.png',  TRUE, TRUE, '09:45:00', 'FEMALE', 'SOLAR'),
-    ('kakao_user1@example.com',  NULL,                               'KUser1',      'KAKAO',
+    ('kakao_user1@example.com',  '$2b$12$uYvA1l2MOfpxADu6mLvjiO/QxCzYBiaSv2wme.ntnqO8wPx8s4VqK',    'KUser1',      'KAKAO',
      '1999-05-30', 'EARTH', '용',    'https://example.com/avatars/user5.png',  TRUE, TRUE, '18:00:00', 'MALE',   'SOLAR'),
-    ('kakao_user2@example.com',  NULL,                               'KUser2',      'KAKAO',
+    ('kakao_user2@example.com',  '$2b$12$uYvA1l2MOfpxADu6mLvjiO/QxCzYBiaSv2wme.ntnqO8wPx8s4VqK',    'KUser2',      'KAKAO',
      '2001-09-09', 'FIRE',  '말',    'https://example.com/avatars/user6.png',  TRUE, TRUE, '07:20:00', 'FEMALE', 'SOLAR'),
-    ('local_user3@example.com',  '$2a$10$abcdefghijklmnopqrstuv', 'LocalUser3',  'LOCAL',
+    ('local_user3@example.com',  '$2b$12$uYvA1l2MOfpxADu6mLvjiO/QxCzYBiaSv2wme.ntnqO8wPx8s4VqK', 'LocalUser3',  'LOCAL',
      NULL,          NULL,   NULL,    NULL,                                   TRUE, TRUE, '00:00:00', NULL,    NULL),
-    ('local_user4@example.com',  '$2a$10$abcdefghijklmnopqrstuv', 'LocalUser4',  'LOCAL',
+    ('local_user4@example.com',  '$2b$12$uYvA1l2MOfpxADu6mLvjiO/QxCzYBiaSv2wme.ntnqO8wPx8s4VqK', 'LocalUser4',  'LOCAL',
      NULL,          NULL,   NULL,    NULL,                                   TRUE, FALSE,'00:00:00', NULL,    NULL),
-    ('local_user5@example.com',  '$2a$10$abcdefghijklmnopqrstuv', 'LocalUser5',  'LOCAL',
+    ('local_user5@example.com',  '$2b$12$uYvA1l2MOfpxADu6mLvjiO/QxCzYBiaSv2wme.ntnqO8wPx8s4VqK', 'LocalUser5',  'LOCAL',
      NULL,          NULL,   NULL,    NULL,                                   FALSE,TRUE,'00:00:00', NULL,    NULL),
-    ('demo_user@example.com',    '$2a$10$abcdefghijklmnopqrstuv', 'DemoUser',    'LOCAL',
+    ('demo_user@example.com',    '$2b$12$uYvA1l2MOfpxADu6mLvjiO/QxCzYBiaSv2wme.ntnqO8wPx8s4VqK', 'DemoUser',    'LOCAL',
      '1997-12-25', 'WATER', '돼지',  'https://example.com/avatars/demo.png', TRUE, TRUE, '10:10:00', 'OTHER',  'SOLAR'),
     -- 추가 더미 사용자 (간단 프로필)
-    ('extra_user1@example.com',  '$2a$10$abcdefghijklmnopqrstuv', 'ExtraUser1',  'LOCAL',
+    ('extra_user1@example.com',  '$2b$12$uYvA1l2MOfpxADu6mLvjiO/QxCzYBiaSv2wme.ntnqO8wPx8s4VqK', 'ExtraUser1',  'LOCAL',
      NULL,          NULL,   NULL,    NULL,                                   TRUE, TRUE, '00:00:00', NULL,    NULL),
-    ('extra_user2@example.com',  '$2a$10$abcdefghijklmnopqrstuv', 'ExtraUser2',  'LOCAL',
+    ('extra_user2@example.com',  '$2b$12$uYvA1l2MOfpxADu6mLvjiO/QxCzYBiaSv2wme.ntnqO8wPx8s4VqK', 'ExtraUser2',  'LOCAL',
      NULL,          NULL,   NULL,    NULL,                                   TRUE, TRUE, '00:00:00', NULL,    NULL),
-    ('extra_user3@example.com',  '$2a$10$abcdefghijklmnopqrstuv', 'ExtraUser3',  'LOCAL',
+    ('extra_user3@example.com',  '$2b$12$uYvA1l2MOfpxADu6mLvjiO/QxCzYBiaSv2wme.ntnqO8wPx8s4VqK', 'ExtraUser3',  'LOCAL',
      NULL,          NULL,   NULL,    NULL,                                   TRUE, TRUE, '00:00:00', NULL,    NULL),
-    ('extra_user4@example.com',  '$2a$10$abcdefghijklmnopqrstuv', 'ExtraUser4',  'LOCAL',
+    ('extra_user4@example.com',  '$2b$12$uYvA1l2MOfpxADu6mLvjiO/QxCzYBiaSv2wme.ntnqO8wPx8s4VqK', 'ExtraUser4',  'LOCAL',
      NULL,          NULL,   NULL,    NULL,                                   TRUE, TRUE, '00:00:00', NULL,    NULL),
-    ('extra_user5@example.com',  '$2a$10$abcdefghijklmnopqrstuv', 'ExtraUser5',  'LOCAL',
+    ('extra_user5@example.com',  '$2b$12$uYvA1l2MOfpxADu6mLvjiO/QxCzYBiaSv2wme.ntnqO8wPx8s4VqK', 'ExtraUser5',  'LOCAL',
      NULL,          NULL,   NULL,    NULL,                                   TRUE, TRUE, '00:00:00', NULL,    NULL),
-    ('extra_user6@example.com',  '$2a$10$abcdefghijklmnopqrstuv', 'ExtraUser6',  'LOCAL',
+    ('extra_user6@example.com',  '$2b$12$uYvA1l2MOfpxADu6mLvjiO/QxCzYBiaSv2wme.ntnqO8wPx8s4VqK', 'ExtraUser6',  'LOCAL',
      NULL,          NULL,   NULL,    NULL,                                   TRUE, TRUE, '00:00:00', NULL,    NULL),
-    ('extra_user7@example.com',  '$2a$10$abcdefghijklmnopqrstuv', 'ExtraUser7',  'LOCAL',
+    ('extra_user7@example.com',  '$2b$12$uYvA1l2MOfpxADu6mLvjiO/QxCzYBiaSv2wme.ntnqO8wPx8s4VqK', 'ExtraUser7',  'LOCAL',
      NULL,          NULL,   NULL,    NULL,                                   TRUE, TRUE, '00:00:00', NULL,    NULL),
-    ('extra_user8@example.com',  '$2a$10$abcdefghijklmnopqrstuv', 'ExtraUser8',  'LOCAL',
+    ('extra_user8@example.com',  '$2b$12$uYvA1l2MOfpxADu6mLvjiO/QxCzYBiaSv2wme.ntnqO8wPx8s4VqK', 'ExtraUser8',  'LOCAL',
      NULL,          NULL,   NULL,    NULL,                                   TRUE, TRUE, '00:00:00', NULL,    NULL),
-    ('extra_user9@example.com',  '$2a$10$abcdefghijklmnopqrstuv', 'ExtraUser9',  'LOCAL',
+    ('extra_user9@example.com',  '$2b$12$uYvA1l2MOfpxADu6mLvjiO/QxCzYBiaSv2wme.ntnqO8wPx8s4VqK', 'ExtraUser9',  'LOCAL',
      NULL,          NULL,   NULL,    NULL,                                   TRUE, TRUE, '00:00:00', NULL,    NULL),
-    ('extra_user10@example.com', '$2a$10$abcdefghijklmnopqrstuv', 'ExtraUser10', 'LOCAL',
+    ('extra_user10@example.com', '$2b$12$uYvA1l2MOfpxADu6mLvjiO/QxCzYBiaSv2wme.ntnqO8wPx8s4VqK', 'ExtraUser10', 'LOCAL',
      NULL,          NULL,   NULL,    NULL,                                   TRUE, TRUE, '00:00:00', NULL,    NULL)
 ON CONFLICT (email) DO NOTHING;
 

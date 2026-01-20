@@ -29,6 +29,8 @@
 | **2.7.16** | **2026-01-20** | **Kakao 동의 스코프를 `profile_nickname` 단일로 축소하고, 이메일은 백엔드가 임의 생성하도록 가이드. OAuth 콜백에서 `isNewUser`면 `/onboarding`으로 즉시 리다이렉트하도록 최초 로그인 플로우 명시(구글/카카오 공통).** | **MadCamp02** |
 | **2.7.17** | **2026-01-20** | **마이페이지에서 생년월일/시간/성별/달력 타입/닉네임을 수정 후 `POST /api/v1/user/onboarding`을 호출해 사주를 재계산하는 재온보딩 플로우를 명시하고, 온보딩 페이지와 동일 DTO/스토어 동기화 규칙으로 통일.** | **MadCamp02** |
 | **2.7.18** | **2026-01-20** | **일반 회원가입 성공 시 자동 로그인 후 `/onboarding`으로 직행하도록 플로우를 고정하고, `hasCompletedOnboarding(user)`(= `birthDate + sajuElement`) 기반 온보딩 강제/라우팅 규칙 및 Investment Style의 프론트 전용 필드 성격을 문서화.** | **MadCamp02** |
+| **2.7.19** | **2026-01-21** | **계산기(`/calculator`) 페이지의 Calc API 연동(배당/세금 계산 1차 버전) 및 환율 조회 API(`/api/v1/exchange-rates`) 활용 계획, 다통화(currency) 확장 Future work를 문서에 반영.** | **MadCamp02** |
+| **2.7.20** | **2026-01-21** | **`auth-store.checkAuth()`가 `/api/v1/auth/me`의 `AuthResponse`를 프론트 `User` 타입으로 매핑하도록 구현(`id/email/nickname/provider/avatarUrl/birthDate/sajuElement` 등)하여, `hasCompletedOnboarding(user)`(= `!!user.birthDate && !!user.sajuElement`)와 `AuthGuard`의 온보딩 강제/차단 로직이 실제 동작과 일치하도록 정합성을 확보. 온보딩 완료 후 “Enter Dashboard” 시 더 이상 `/onboarding`으로 되돌아가지 않음을 확인.** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -233,8 +235,8 @@ src/
 - **랭킹 `/ranking`**: `gameApi.getRanking` 호출로 Top 리스트/내 랭킹 로딩. `user-store`의 `isRankingJoined` 상태와 연계.
 - **마이페이지 `/mypage`**: 프로필/인벤토리/지갑/랭킹 참여 토글 모두 `userApi`/`gameApi` 실 호출로 동작. 공개/랭킹참여 토글은 `userApi.updateProfile`을 통해 서버 반영.
 - **AI 도사 `/oracle`**: `lib/api/ai.ts`가 FastAPI(`http://localhost:8000`)에 POST 호출하여 응답을 받음. SSE 스트리밍은 아직 미구현.
-- **온보딩 `/onboarding`**: UI가 `nickname/birthDate/birthTime/gender/calendarType` 필드 모두 입력 받고 `userApi.submitOnboarding`(POST `/api/v1/user/onboarding`)을 호출. 응답의 `saju` 필드 기반 결과 표시(없으면 기본값).
-- **계산기 `/calculator`**: 페이지는 존재하나 안내 문구만 표시(기능 미구현).
+- **온보딩 `/onboarding`**: UI가 `nickname/birthDate/birthTime/gender/calendarType` 필드 모두 입력 받고 `userApi.submitOnboarding`(POST `/api/v1/user/onboarding`)을 호출. 응답의 `saju` 필드 기반 결과 표시(없으면 기본값). 마이페이지에서 동일 DTO를 사용해 재온보딩(사주 재계산)도 수행한다.
+- **계산기 `/calculator`**: 배당/세금 계산 폼을 표시하고, 사용자가 입력한 배당 수익률/주당 배당액/세율을 `calcApi.getDividend/getTax`를 통해 백엔드 Calc API와 연동한다. Currency는 현재 `null`로 내려오며, 화면에서는 USD 기준 값으로만 표시한다.
 - **인증**:
   - `/login`: 이메일 로그인은 `authApi.login` 호출 후 토큰 저장·`checkAuth` 실행. Kakao/Google은 SDK 기반 Frontend-Driven + Redirect Fallback 모두 지원. Refresh는 Axios 인터셉터(`/api/v1/auth/refresh`)로 재시도.
   - `/signup`: `authApi.signup` 연동, 폼 검증 후 성공 시 `/login`으로 안내.
@@ -477,6 +479,31 @@ interface TradeHistoryResponse {
 - **스트리밍 답변**: SSE를 통해 실시간으로 답변 생성되는 과정 표시.
   - API: `POST /api/v1/chat/ask` (백엔드 프록시, SSE 스트리밍)
 
+### 5.9 계산기 (`/calculator`) 🆕
+
+- **상태**: 라우트/레이아웃 및 백엔드 Calc API는 존재하며, 1차 버전 배당/세금 계산 로직이 구현된 상태 (다통화는 미구현).
+- **목표**: 기본적인 배당/세금 계산기를 제공하되, 복잡한 세법 구현보다는 UX/학습용 계산에 집중. 향후 환율/다통화 지원까지 확장.
+- **현재 연동(1차 버전)**:
+  - 백엔드 Calc API:
+    - `GET /api/v1/calc/dividend?assumedDividendYield&dividendPerShare&taxRate`
+      - `assumedDividendYield`: 배당 수익률(0.03 = 3%), 지갑 총자산 기준 `totalDividend` 계산.
+      - `dividendPerShare`: 주당 배당액 (현재 버전에서는 사용하지 않지만, UI 입력 필드로는 확보).
+      - `taxRate`: 배당소득세 세율.
+    - `GET /api/v1/calc/tax?taxRate`
+      - `taxRate`: 양도소득세 세율.
+  - 응답 DTO:
+    - `CalcDividendResponse { totalDividend, withholdingTax, netDividend, currency(null) }`
+    - `CalcTaxResponse { realizedProfit, taxBase, estimatedTax, currency(null) }`
+  - Frontend 사용 예:
+    - `calcApi.getDividend({ assumedDividendYield, dividendPerShare, taxRate })`
+    - `calcApi.getTax({ taxRate })`
+- **환율/다통화 확장 계획(요약)**:
+  - 백엔드에서 `exchange_rates` 테이블과 `/api/v1/exchange-rates`, `/api/v1/exchange-rates/latest` API를 통해 환율을 제공.
+  - 추후 Calc API에 `currency` 쿼리 파라미터를 추가(`USD`, `KRW`, `EUR` 등)하고,
+    - USD 기준 계산 결과를 환율 테이블 기준으로 변환해 응답(`currency`, `fxAsOf`, `fxRateUsed`)을 채우는 것을 목표로 한다.
+  - 프론트 `/calculator` 페이지에는 통화 선택 드롭다운을 추가하고,
+    - 선택된 통화와 환율(`exchange-rates` API 응답)을 기반으로 금액 표시 포맷과 기준일(`fxAsOf`)을 함께 노출하는 UX를 설계한다.
+
 ---
 
 ## 6. 상태 관리 (State Management)
@@ -696,8 +723,8 @@ flowchart TD
 
 ---
 
-**문서 버전:** 2.7.18 (온보딩/마이페이지 사주 재계산 플로우, `/user/onboarding` 재온보딩 연동 및 hasCompletedOnboarding 기반 필수 온보딩 플로우 반영)  
-**최종 수정일:** 2026-01-20
+**문서 버전:** 2.7.20 (온보딩/마이페이지 사주 재계산 플로우 + `/auth/me` 응답 매핑 및 hasCompletedOnboarding·AuthGuard 라우팅 정합성 반영)  
+**최종 수정일:** 2026-01-21
 
 ### 수정 요약 (2026-01-19)
 

@@ -37,12 +37,14 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
 import java.security.SecureRandom;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -57,6 +59,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     private final JwtTokenProvider jwtTokenProvider;
     private final RedisTemplate<String, String> redisTemplate;
     private final WatchlistRepository watchlistRepository;
+    private final PasswordEncoder passwordEncoder;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom(); // 임의 이메일/닉네임 생성용
 
     // 프론트엔드 리다이렉트 URL (로그인 성공 후 이동할 페이지)
@@ -123,8 +126,12 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
             }
 
             // 신규 사용자 생성
+            String socialRawPassword = generateRandomPassword();
+            String socialEncodedPassword = passwordEncoder.encode(socialRawPassword);
+
             user = User.builder()
                     .email(email)
+                    .password(socialEncodedPassword)
                     .nickname(nickname)
                     .provider(provider)
                     .build();
@@ -194,6 +201,17 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     private String generateKakaoNickname() {
         int randomNumber = SECURE_RANDOM.nextInt(1_000_000); // 0~999999
         return String.format("kakao-user-%06d", randomNumber);
+    }
+
+    /**
+     * 소셜 계정용 임의 비밀번호를 생성한다.
+     * USER.password가 항상 null이 아니도록, 예측 불가능한 랜덤 문자열을 생성해
+     * 암호화된 값으로 저장하는 데 사용한다.
+     */
+    private String generateRandomPassword() {
+        byte[] randomBytes = new byte[16];
+        SECURE_RANDOM.nextBytes(randomBytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
     }
 
     /**
