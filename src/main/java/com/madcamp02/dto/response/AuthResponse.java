@@ -124,6 +124,7 @@ package com.madcamp02.dto.response;
 
 import lombok.Builder;
 import lombok.Getter;
+import java.time.LocalDate;
 
 @Getter
 @Builder
@@ -180,6 +181,17 @@ public class AuthResponse {
     // 사용자 고유 ID (PK)
     //------------------------------------------
     private Long userId;
+
+    //------------------------------------------
+    // 생년월일 (온보딩 기준 필드)
+    //------------------------------------------
+    // - null: 온보딩 미완료 또는 아직 입력 전
+    // - 값 존재: 온보딩을 통해 기본 프로필이 확정된 상태
+    // 프론트의 hasCompletedOnboarding(user) 헬퍼가
+    // birthDate + sajuElement 조합으로 온보딩 완료 여부를 판별하므로,
+    // /auth/me 응답에는 반드시 이 필드를 포함해 줘야 한다.
+    //------------------------------------------
+    private LocalDate birthDate;
 
     //------------------------------------------
     // 이메일

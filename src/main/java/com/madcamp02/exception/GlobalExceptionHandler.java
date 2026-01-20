@@ -3,6 +3,7 @@ package com.madcamp02.exception;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -212,6 +213,39 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .badRequest()
                 .body(ErrorResponse.of(HttpStatus.BAD_REQUEST, "BIND_ERROR", "요청 데이터 바인딩에 실패했습니다."));
+    }
+
+    /**
+     * HTTP 메시지 읽기 실패 예외 처리
+     * 
+     * 발생 상황:
+     * - @RequestBody가 필수인데 요청 본문이 없을 때
+     * - JSON 형식이 잘못되었을 때
+     * - 예: POST /api/v1/auth/refresh 호출 시 body가 없을 때
+     * 
+     * @param e HTTP 메시지 읽기 예외
+     * @return ErrorResponse
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleHttpMessageNotReadableException(HttpMessageNotReadableException e) {
+        log.warn("HttpMessageNotReadableException: {}", e.getMessage());
+        
+        // 요청 경로 확인
+        String requestPath = "";
+        if (e.getCause() != null && e.getCause().getStackTrace().length > 0) {
+            // 스택 트레이스에서 요청 경로 추출 시도
+        }
+
+        String message = "요청 본문이 필요합니다.";
+        if (e.getMessage() != null && e.getMessage().contains("Required request body is missing")) {
+            message = "요청 본문이 누락되었습니다. JSON 형식의 요청 본문을 포함해주세요. 예: {\"refreshToken\": \"토큰값\"}";
+        } else if (e.getMessage() != null && e.getMessage().contains("JSON")) {
+            message = "JSON 형식이 올바르지 않습니다. 요청 본문을 확인해주세요.";
+        }
+
+        return ResponseEntity
+                .badRequest()
+                .body(ErrorResponse.of(HttpStatus.BAD_REQUEST, "REQUEST_BODY_MISSING", message));
     }
 
     // ========== 기타 모든 예외 처리 (Fallback) ==========

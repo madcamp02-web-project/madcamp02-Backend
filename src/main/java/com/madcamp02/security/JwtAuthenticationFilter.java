@@ -42,6 +42,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = jwtTokenProvider.resolveToken(request);
         //이걸 실행할 경우 주로 Authorization 헤더에서 Bearer로 시작하는 토큰 문자열을 가져오게 됨
 
+        String requestPath = request.getRequestURI();
+        String authHeader = request.getHeader("Authorization");
+        
+        log.debug("JWT 필터 실행 - 경로: {}, Authorization 헤더 존재: {}", requestPath, authHeader != null);
+
         // 2. 토큰 유효성 검사
         if (StringUtils.hasText(token) && jwtTokenProvider.validateToken(token)) {
             //토큰이 비어있지 않은지(hasText), 그리고 위조되거나 만료되지 않았는지(validateToken) 확인
@@ -50,6 +55,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String tokenType = jwtTokenProvider.getTokenType(token);
             //이 필터는 오직 Access Token을 가진 요청만 인증 처리
             //(Refresh Token을 통한 재발급은 별도 로직으로 처리됨을 암시)
+
+            log.debug("토큰 타입 확인 - Type: {}", tokenType);
 
             if ("ACCESS".equals(tokenType)) {
                 // 4. 토큰에서 Authentication 객체 가져오기
@@ -62,6 +69,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 //SecurityContextHolder에 저장해서 Spring Security가 이후의 로직(Controller 등)에서 "이 사용자는 로그인했다"라고 인식
 
                 log.debug("Security Context에 인증 정보 저장: {}", authentication.getName());
+            } else {
+                log.warn("Access Token이 아닌 토큰 타입: {}", tokenType);
+            }
+        } else {
+            if (!StringUtils.hasText(token)) {
+                log.debug("요청에 토큰이 없습니다 - 경로: {}", requestPath);
+            } else {
+                log.warn("유효하지 않은 토큰 - 경로: {}", requestPath);
             }
         }
 

@@ -16,12 +16,15 @@ package com.madcamp02.controller;
 //   이 컨트롤러는 "로그인(Access Token)"이 반드시 필요하니까 주의하셈
 //======================================
 
+import com.madcamp02.dto.request.AddWatchlistRequest;
 import com.madcamp02.dto.request.UserOnboardingRequest;
 import com.madcamp02.dto.request.UserUpdateRequest;
 import com.madcamp02.dto.response.UserMeResponse;
 import com.madcamp02.dto.response.UserWalletResponse;
+import com.madcamp02.dto.response.UserWatchlistResponse;
 import com.madcamp02.security.CustomUserDetails;
 import com.madcamp02.service.UserService;
+import com.madcamp02.service.WatchlistService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -38,6 +41,7 @@ import org.springframework.web.bind.annotation.*;
 public class UserController {
 
     private final UserService userService;
+    private final WatchlistService watchlistService;
 
     //------------------------------------------
     // 내 프로필 상세 조회
@@ -96,6 +100,54 @@ public class UserController {
     @GetMapping("/wallet")
     public ResponseEntity<UserWalletResponse> wallet(@AuthenticationPrincipal CustomUserDetails userDetails) {
         UserWalletResponse response = userService.getWallet(userDetails.getUserId());
+        return ResponseEntity.ok(response);
+    }
+
+    //------------------------------------------
+    // 관심종목 조회
+    //------------------------------------------
+    // 요청: GET /api/v1/user/watchlist
+    // 헤더: Authorization: Bearer {accessToken}
+    //------------------------------------------
+    @Operation(summary = "관심종목 조회", description = "로그인된 사용자의 관심종목 목록 조회", security = @SecurityRequirement(name = "bearer-key"))
+    @GetMapping("/watchlist")
+    public ResponseEntity<UserWatchlistResponse> getWatchlist(@AuthenticationPrincipal CustomUserDetails userDetails) {
+        UserWatchlistResponse response = watchlistService.getMyWatchlistResponse(userDetails.getUserId());
+        return ResponseEntity.ok(response);
+    }
+
+    //------------------------------------------
+    // 관심종목 추가
+    //------------------------------------------
+    // 요청: POST /api/v1/user/watchlist
+    // 헤더: Authorization: Bearer {accessToken}
+    // Body: { "ticker": "AAPL" }
+    //------------------------------------------
+    @Operation(summary = "관심종목 추가", description = "관심종목에 종목 추가 (중복 시 무시)", security = @SecurityRequirement(name = "bearer-key"))
+    @PostMapping("/watchlist")
+    public ResponseEntity<UserWatchlistResponse> addWatchlist(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @Valid @RequestBody AddWatchlistRequest request
+    ) {
+        watchlistService.addTicker(userDetails.getUserId(), request.getTicker());
+        UserWatchlistResponse response = watchlistService.getMyWatchlistResponse(userDetails.getUserId());
+        return ResponseEntity.ok(response);
+    }
+
+    //------------------------------------------
+    // 관심종목 삭제
+    //------------------------------------------
+    // 요청: DELETE /api/v1/user/watchlist/{ticker}
+    // 헤더: Authorization: Bearer {accessToken}
+    //------------------------------------------
+    @Operation(summary = "관심종목 삭제", description = "관심종목에서 종목 제거", security = @SecurityRequirement(name = "bearer-key"))
+    @DeleteMapping("/watchlist/{ticker}")
+    public ResponseEntity<UserWatchlistResponse> removeWatchlist(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable String ticker
+    ) {
+        watchlistService.removeTicker(userDetails.getUserId(), ticker);
+        UserWatchlistResponse response = watchlistService.getMyWatchlistResponse(userDetails.getUserId());
         return ResponseEntity.ok(response);
     }
 }

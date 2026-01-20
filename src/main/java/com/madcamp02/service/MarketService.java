@@ -9,17 +9,27 @@ package com.madcamp02.service;
 // - GET /api/v1/market/indices
 // - GET /api/v1/market/news
 // - GET /api/v1/market/movers
+//
+// Phase 3.6: Redis 캐싱 확장
+// - Stale 데이터 처리 (TTL 만료 후에도 1시간 보관)
+// - 응답 헤더 추가 (X-Cache-Status, X-Cache-Age, X-Data-Freshness)
+// - API 실패 시 Stale 데이터 Fallback
+// - 동적 TTL (movers의 경우 시장 변동성에 따라 1-5분)
 //======================================
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.madcamp02.domain.stock.MarketCapStock;
 import com.madcamp02.domain.stock.MarketCapStockRepository;
 import com.madcamp02.dto.response.MarketIndicesResponse;
 import com.madcamp02.dto.response.MarketMoversResponse;
 import com.madcamp02.dto.response.MarketNewsResponse;
 import com.madcamp02.external.FinnhubClient;
+import com.madcamp02.service.cache.CacheResult;
+import com.madcamp02.service.cache.MarketCacheConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +39,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -38,6 +49,8 @@ public class MarketService {
 
     private final FinnhubClient finnhubClient;
     private final MarketCapStockRepository marketCapStockRepository;
+    private final StringRedisTemplate redisTemplate;
+    private final ObjectMapper objectMapper;
 
     // 주요 미국 지수 심볼 리스트 (ETF 사용 - Finnhub Quote API는 지수 심볼을 지원하지 않음)
     // 참고: Finnhub Quote API는 US stocks만 지원하며, 지수 심볼(^DJI, ^GSPC, ^IXIC)은 지원하지 않음
@@ -58,8 +71,100 @@ public class MarketService {
     // 지수 정보 조회 (GET /api/v1/market/indices)
     //------------------------------------------
     @Transactional(readOnly = true)
-    @Cacheable(value = "market:indices", key = "'indices'")
-    public MarketIndicesResponse getIndices() {
+    public CacheResult<MarketIndicesResponse> getIndices() {
+        String cacheKey = MarketCacheConstants.CACHE_KEY_INDICES;
+        String staleKey = MarketCacheConstants.getStaleKey(cacheKey);
+        
+        // 1. Fresh 캐시 확인
+        String cachedData = redisTemplate.opsForValue().get(cacheKey);
+        if (cachedData != null) {
+            Long ttl = redisTemplate.getExpire(cacheKey);
+            if (ttl != null && ttl > 0) {
+                // FRESH 데이터 반환
+                try {
+                    MarketIndicesResponse data = objectMapper.readValue(cachedData, MarketIndicesResponse.class);
+                    long cacheAge = MarketCacheConstants.TTL_INDICES_FRESH - ttl;
+                    log.debug("캐시 Hit: indices (Age: {}초)", cacheAge);
+                    return CacheResult.hit(data, cacheAge);
+                } catch (JsonProcessingException e) {
+                    log.warn("캐시 데이터 파싱 실패: {}", e.getMessage());
+                }
+            }
+        }
+        
+        // 2. Stale 캐시 확인
+        String staleData = redisTemplate.opsForValue().get(staleKey);
+        if (staleData != null) {
+            try {
+                MarketIndicesResponse data = objectMapper.readValue(staleData, MarketIndicesResponse.class);
+                Long staleTtl = redisTemplate.getExpire(staleKey);
+                long cacheAge = staleTtl != null ? MarketCacheConstants.TTL_STALE - staleTtl : MarketCacheConstants.TTL_STALE;
+                log.debug("Stale 캐시 사용: indices (Age: {}초)", cacheAge);
+                return CacheResult.stale(data, cacheAge);
+            } catch (JsonProcessingException e) {
+                log.warn("Stale 캐시 데이터 파싱 실패: {}", e.getMessage());
+            }
+        }
+        
+        // 3. API 호출
+        try {
+            MarketIndicesResponse data = fetchIndicesFromApi();
+            
+            // Fresh 캐시 저장
+            try {
+                String jsonData = objectMapper.writeValueAsString(data);
+                redisTemplate.opsForValue().set(
+                        cacheKey,
+                        jsonData,
+                        MarketCacheConstants.TTL_INDICES_FRESH,
+                        TimeUnit.SECONDS
+                );
+                log.debug("Fresh 캐시 저장: indices (TTL: {}초)", MarketCacheConstants.TTL_INDICES_FRESH);
+            } catch (JsonProcessingException e) {
+                log.warn("캐시 저장 실패: {}", e.getMessage());
+            }
+            
+            // Stale 캐시 저장
+            try {
+                String jsonData = objectMapper.writeValueAsString(data);
+                redisTemplate.opsForValue().set(
+                        staleKey,
+                        jsonData,
+                        MarketCacheConstants.TTL_STALE,
+                        TimeUnit.SECONDS
+                );
+                log.debug("Stale 캐시 저장: indices (TTL: {}초)", MarketCacheConstants.TTL_STALE);
+            } catch (JsonProcessingException e) {
+                log.warn("Stale 캐시 저장 실패: {}", e.getMessage());
+            }
+            
+            log.debug("API 호출 완료: indices");
+            return CacheResult.miss(data);
+            
+        } catch (Exception e) {
+            log.error("지수 조회 API 호출 실패: {}", e.getMessage(), e);
+            
+            // API 실패 시 Stale 데이터 반환
+            if (staleData != null) {
+                try {
+                    MarketIndicesResponse data = objectMapper.readValue(staleData, MarketIndicesResponse.class);
+                    Long staleTtl = redisTemplate.getExpire(staleKey);
+                    long cacheAge = staleTtl != null ? MarketCacheConstants.TTL_STALE - staleTtl : MarketCacheConstants.TTL_STALE;
+                    log.warn("API 실패, Stale 데이터 반환: indices (Age: {}초)", cacheAge);
+                    return CacheResult.stale(data, cacheAge);
+                } catch (JsonProcessingException ex) {
+                    log.error("Stale 데이터 파싱 실패: {}", ex.getMessage());
+                }
+            }
+            
+            throw new RuntimeException("지수 조회 실패 및 Stale 데이터 없음", e);
+        }
+    }
+    
+    /**
+     * API에서 지수 데이터 조회 (내부 메서드)
+     */
+    private MarketIndicesResponse fetchIndicesFromApi() {
         log.debug("주요 지수 조회 시작 (ETF 사용: SPY, QQQ, DIA)");
 
         List<MarketIndicesResponse.Item> items = new ArrayList<>();
@@ -130,8 +235,100 @@ public class MarketService {
     // 시장 뉴스 조회 (GET /api/v1/market/news)
     //------------------------------------------
     @Transactional(readOnly = true)
-    @Cacheable(value = "market:news", key = "'news'")
-    public MarketNewsResponse getNews() {
+    public CacheResult<MarketNewsResponse> getNews() {
+        String cacheKey = MarketCacheConstants.CACHE_KEY_NEWS;
+        String staleKey = MarketCacheConstants.getStaleKey(cacheKey);
+        
+        // 1. Fresh 캐시 확인
+        String cachedData = redisTemplate.opsForValue().get(cacheKey);
+        if (cachedData != null) {
+            Long ttl = redisTemplate.getExpire(cacheKey);
+            if (ttl != null && ttl > 0) {
+                // FRESH 데이터 반환
+                try {
+                    MarketNewsResponse data = objectMapper.readValue(cachedData, MarketNewsResponse.class);
+                    long cacheAge = MarketCacheConstants.TTL_NEWS_FRESH - ttl;
+                    log.debug("캐시 Hit: news (Age: {}초)", cacheAge);
+                    return CacheResult.hit(data, cacheAge);
+                } catch (JsonProcessingException e) {
+                    log.warn("캐시 데이터 파싱 실패: {}", e.getMessage());
+                }
+            }
+        }
+        
+        // 2. Stale 캐시 확인
+        String staleData = redisTemplate.opsForValue().get(staleKey);
+        if (staleData != null) {
+            try {
+                MarketNewsResponse data = objectMapper.readValue(staleData, MarketNewsResponse.class);
+                Long staleTtl = redisTemplate.getExpire(staleKey);
+                long cacheAge = staleTtl != null ? MarketCacheConstants.TTL_STALE - staleTtl : MarketCacheConstants.TTL_STALE;
+                log.debug("Stale 캐시 사용: news (Age: {}초)", cacheAge);
+                return CacheResult.stale(data, cacheAge);
+            } catch (JsonProcessingException e) {
+                log.warn("Stale 캐시 데이터 파싱 실패: {}", e.getMessage());
+            }
+        }
+        
+        // 3. API 호출
+        try {
+            MarketNewsResponse data = fetchNewsFromApi();
+            
+            // Fresh 캐시 저장
+            try {
+                String jsonData = objectMapper.writeValueAsString(data);
+                redisTemplate.opsForValue().set(
+                        cacheKey,
+                        jsonData,
+                        MarketCacheConstants.TTL_NEWS_FRESH,
+                        TimeUnit.SECONDS
+                );
+                log.debug("Fresh 캐시 저장: news (TTL: {}초)", MarketCacheConstants.TTL_NEWS_FRESH);
+            } catch (JsonProcessingException e) {
+                log.warn("캐시 저장 실패: {}", e.getMessage());
+            }
+            
+            // Stale 캐시 저장
+            try {
+                String jsonData = objectMapper.writeValueAsString(data);
+                redisTemplate.opsForValue().set(
+                        staleKey,
+                        jsonData,
+                        MarketCacheConstants.TTL_STALE,
+                        TimeUnit.SECONDS
+                );
+                log.debug("Stale 캐시 저장: news (TTL: {}초)", MarketCacheConstants.TTL_STALE);
+            } catch (JsonProcessingException e) {
+                log.warn("Stale 캐시 저장 실패: {}", e.getMessage());
+            }
+            
+            log.debug("API 호출 완료: news");
+            return CacheResult.miss(data);
+            
+        } catch (Exception e) {
+            log.error("뉴스 조회 API 호출 실패: {}", e.getMessage(), e);
+            
+            // API 실패 시 Stale 데이터 반환
+            if (staleData != null) {
+                try {
+                    MarketNewsResponse data = objectMapper.readValue(staleData, MarketNewsResponse.class);
+                    Long staleTtl = redisTemplate.getExpire(staleKey);
+                    long cacheAge = staleTtl != null ? MarketCacheConstants.TTL_STALE - staleTtl : MarketCacheConstants.TTL_STALE;
+                    log.warn("API 실패, Stale 데이터 반환: news (Age: {}초)", cacheAge);
+                    return CacheResult.stale(data, cacheAge);
+                } catch (JsonProcessingException ex) {
+                    log.error("Stale 데이터 파싱 실패: {}", ex.getMessage());
+                }
+            }
+            
+            throw new RuntimeException("뉴스 조회 실패 및 Stale 데이터 없음", e);
+        }
+    }
+    
+    /**
+     * API에서 뉴스 데이터 조회 (내부 메서드)
+     */
+    private MarketNewsResponse fetchNewsFromApi() {
         log.debug("시장 뉴스 조회 시작");
 
         List<FinnhubClient.NewsItem> newsItems = finnhubClient.getNews("general");
@@ -170,13 +367,144 @@ public class MarketService {
     // 급등/급락 종목 조회 (GET /api/v1/market/movers)
     //------------------------------------------
     // Phase 3.5: Top 20 Market Cap 리스트를 DB로 관리
+    // Phase 3.6: 동적 TTL 적용 (변동성에 따라 1-5분)
     // 주의: Finnhub에 "movers" 전용 엔드포인트가 없으므로
     // 주요 미국 주식들의 quote를 조회하여 changePercent 기준으로 정렬
     // 종목명은 검색 API로 조회
     //------------------------------------------
     @Transactional(readOnly = true)
-    @Cacheable(value = "market:movers", key = "'movers'")
-    public MarketMoversResponse getMovers() {
+    public CacheResult<MarketMoversResponse> getMovers() {
+        String cacheKey = MarketCacheConstants.CACHE_KEY_MOVERS;
+        String staleKey = MarketCacheConstants.getStaleKey(cacheKey);
+        
+        // 1. Fresh 캐시 확인
+        String cachedData = redisTemplate.opsForValue().get(cacheKey);
+        if (cachedData != null) {
+            Long ttl = redisTemplate.getExpire(cacheKey);
+            if (ttl != null && ttl > 0) {
+                // FRESH 데이터 반환
+                try {
+                    MarketMoversResponse data = objectMapper.readValue(cachedData, MarketMoversResponse.class);
+                    // TTL이 동적이므로 정확한 Age 계산을 위해 저장 시점 정보 필요
+                    // 간단히 최대 TTL에서 현재 TTL을 빼서 계산
+                    long cacheAge = MarketCacheConstants.TTL_MOVERS_FRESH_MAX - ttl;
+                    log.debug("캐시 Hit: movers (Age: {}초)", cacheAge);
+                    return CacheResult.hit(data, cacheAge);
+                } catch (JsonProcessingException e) {
+                    log.warn("캐시 데이터 파싱 실패: {}", e.getMessage());
+                }
+            }
+        }
+        
+        // 2. Stale 캐시 확인
+        String staleData = redisTemplate.opsForValue().get(staleKey);
+        if (staleData != null) {
+            try {
+                MarketMoversResponse data = objectMapper.readValue(staleData, MarketMoversResponse.class);
+                Long staleTtl = redisTemplate.getExpire(staleKey);
+                long cacheAge = staleTtl != null ? MarketCacheConstants.TTL_STALE - staleTtl : MarketCacheConstants.TTL_STALE;
+                log.debug("Stale 캐시 사용: movers (Age: {}초)", cacheAge);
+                return CacheResult.stale(data, cacheAge);
+            } catch (JsonProcessingException e) {
+                log.warn("Stale 캐시 데이터 파싱 실패: {}", e.getMessage());
+            }
+        }
+        
+        // 3. API 호출
+        try {
+            MarketMoversResponse data = fetchMoversFromApi();
+            
+            // 동적 TTL 계산: 평균 변동률에 따라 결정
+            long dynamicTtl = calculateDynamicTtl(data);
+            
+            // Fresh 캐시 저장
+            try {
+                String jsonData = objectMapper.writeValueAsString(data);
+                redisTemplate.opsForValue().set(
+                        cacheKey,
+                        jsonData,
+                        dynamicTtl,
+                        TimeUnit.SECONDS
+                );
+                log.debug("Fresh 캐시 저장: movers (동적 TTL: {}초)", dynamicTtl);
+            } catch (JsonProcessingException e) {
+                log.warn("캐시 저장 실패: {}", e.getMessage());
+            }
+            
+            // Stale 캐시 저장
+            try {
+                String jsonData = objectMapper.writeValueAsString(data);
+                redisTemplate.opsForValue().set(
+                        staleKey,
+                        jsonData,
+                        MarketCacheConstants.TTL_STALE,
+                        TimeUnit.SECONDS
+                );
+                log.debug("Stale 캐시 저장: movers (TTL: {}초)", MarketCacheConstants.TTL_STALE);
+            } catch (JsonProcessingException e) {
+                log.warn("Stale 캐시 저장 실패: {}", e.getMessage());
+            }
+            
+            log.debug("API 호출 완료: movers");
+            return CacheResult.miss(data);
+            
+        } catch (Exception e) {
+            log.error("급등/급락 종목 조회 API 호출 실패: {}", e.getMessage(), e);
+            
+            // API 실패 시 Stale 데이터 반환
+            if (staleData != null) {
+                try {
+                    MarketMoversResponse data = objectMapper.readValue(staleData, MarketMoversResponse.class);
+                    Long staleTtl = redisTemplate.getExpire(staleKey);
+                    long cacheAge = staleTtl != null ? MarketCacheConstants.TTL_STALE - staleTtl : MarketCacheConstants.TTL_STALE;
+                    log.warn("API 실패, Stale 데이터 반환: movers (Age: {}초)", cacheAge);
+                    return CacheResult.stale(data, cacheAge);
+                } catch (JsonProcessingException ex) {
+                    log.error("Stale 데이터 파싱 실패: {}", ex.getMessage());
+                }
+            }
+            
+            throw new RuntimeException("급등/급락 종목 조회 실패 및 Stale 데이터 없음", e);
+        }
+    }
+    
+    /**
+     * 동적 TTL 계산: 평균 변동률에 따라 1-5분 결정
+     * 
+     * @param data MarketMoversResponse 데이터
+     * @return TTL (초 단위)
+     */
+    private long calculateDynamicTtl(MarketMoversResponse data) {
+        if (data.getItems() == null || data.getItems().isEmpty()) {
+            return MarketCacheConstants.TTL_MOVERS_FRESH_MAX; // 기본값: 최대 TTL
+        }
+        
+        // 평균 변동률 절댓값 계산
+        double avgChangePercent = data.getItems().stream()
+                .mapToDouble(item -> Math.abs(item.getChangePercent()))
+                .average()
+                .orElse(0.0);
+        
+        // 변동성이 높으면(평균 3% 이상) 짧은 TTL(60초), 낮으면 긴 TTL(300초)
+        // 선형 보간: 0% -> 300초, 5% 이상 -> 60초
+        if (avgChangePercent >= 5.0) {
+            return MarketCacheConstants.TTL_MOVERS_FRESH_MIN;
+        } else if (avgChangePercent <= 0.0) {
+            return MarketCacheConstants.TTL_MOVERS_FRESH_MAX;
+        } else {
+            // 선형 보간: (5 - avgChangePercent) / 5 * (300 - 60) + 60
+            long ttl = (long) ((5.0 - avgChangePercent) / 5.0 * 
+                    (MarketCacheConstants.TTL_MOVERS_FRESH_MAX - MarketCacheConstants.TTL_MOVERS_FRESH_MIN) + 
+                    MarketCacheConstants.TTL_MOVERS_FRESH_MIN);
+            return Math.max(MarketCacheConstants.TTL_MOVERS_FRESH_MIN, 
+                    Math.min(MarketCacheConstants.TTL_MOVERS_FRESH_MAX, ttl));
+        }
+    }
+    
+    /**
+     * API에서 급등/급락 종목 데이터 조회 (내부 메서드)
+     */
+    private MarketMoversResponse fetchMoversFromApi() {
         log.debug("급등/급락 종목 조회 시작 (미국 주식)");
 
         // DB에서 활성화된 종목 리스트 조회 (순위 순)

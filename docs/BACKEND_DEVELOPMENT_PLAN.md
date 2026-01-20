@@ -1,6 +1,6 @@
 # ⚙️ MadCamp02: 백엔드 개발 계획서
 
-**Ver 2.7.14 - Backend Development Blueprint (Spec-Driven Alignment)**
+**Ver 2.7.17 - Backend Development Blueprint (Spec-Driven Alignment)**
 
 ---
 
@@ -31,6 +31,12 @@
 | **2.7.12** | **2026-01-19** | **Phase 5.5 실행: Game/Shop/Inventory/Ranking 에러 코드·DB 제약·프론트 연동 가이드 최종 반영(GAME_001~003, items.category CHECK, is_ranking_joined 필터 검증)** | **MadCamp02** |
 | **2.7.13** | **2026-01-19** | **Phase 6 실행: Finnhub Trades WebSocket 연동 완료 - 싱글톤 클라이언트, 메시지 파싱/정규화, Redis/STOMP 브로드캐스트, destination 안전성 정책 고정** | **MadCamp02** |
 | **2.7.14** | **2026-01-19** | **Phase 4~6 구현 코드 기준 Game/Trade/Realtime(WebSocket) 정합성 재정리 및 상태 테이블/페이로드·destination 설명 보완** | **MadCamp02** |
+| **2.7.15** | **2026-01-19** | **Phase 3.6: 백엔드 Redis 캐싱 확장 (Market Indices/News/Movers) 및 프론트엔드 이중 캐싱 전략 수립** | **MadCamp02** |
+| **2.7.16** | **2026-01-19** | **Phase 3.4: Candles API 날짜 범위 필터링 구현 완료 내용 문서화 (period 필드, 배치 로드 전략, Quota 관리 상세 명세 추가)** | **MadCamp02** |
+| **2.7.17** | **2026-01-20** | **Kakao 동의 스코프를 `profile_nickname` 단일로 축소, 이메일 미요청 시 백엔드가 임의 이메일(`kakao-{timestamp}-{random}@auth.madcamp02.local`)을 생성·중복 검사 후 가입하도록 프로비저닝 로직 보강(하이브리드 OAuth 공통)** | **MadCamp02** |
+| **2.7.18** | **2026-01-20** | **`POST /api/v1/user/onboarding`가 최초 온보딩과 마이페이지 사주 정보 수정 시 재계산(재온보딩)을 모두 처리하는 idempotent 엔드포인트임을 명시하고, 재온보딩 시 `users.*` 사주 관련 컬럼을 안전하게 덮어쓰도록 정책을 고정. 온보딩 완료 여부는 별도 플래그 없이 `users.birth_date + users.saju_element` 조합으로 해석함을 명시.** | **MadCamp02** |
+| **2.7.19** | **2026-01-21** | **환율 테이블(`exchange_rates`) 및 한국수출입은행 Open API 기반 환율 수집 배치/조회 API(`/api/v1/exchange-rates`) 설계·구현 현황과 Calc API(배당/세금 계산) 1차 버전 쿼리 파라미터/응답 규약을 문서에 반영. 온보딩 전용 에러 코드(ONBOARDING_001~003)와 `User.hasCompletedOnboarding()` 헬퍼 도입을 계획서에 기록.** | **MadCamp02** |
+| **2.7.20** | **2026-01-21** | **`GET /api/v1/auth/me` 응답에 `birthDate` 필드를 포함하도록 `AuthResponse`·`AuthController.me`·`AuthService`를 정리하고, `User.hasCompletedOnboarding()` 기준(`birthDate + sajuElement`)에 맞춰 온보딩 강제 플로우(백엔드/프론트 `hasCompletedOnboarding(user)`/AuthGuard)가 실제 구현과 정합하게 동작함을 확인. 개발/테스트 계정 더미 데이터(`V7__insert_test_data.sql`)의 비밀번호를 공통 값(평문 `Password123!`)으로 통일하고 주석으로 명시하여 로그인 시나리오를 문서화.** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -230,6 +236,21 @@ erDiagram
     - `category` 컬럼 ENUM: `NAMEPLATE` (이름표/테두리), `AVATAR` (아바타 장식), `THEME` (앱 테마)
     - 프론트엔드 `Shop` 페이지 탭 구성과 정확히 일치
 
+3.  **ExchangeRates 테이블 (환율) 🆕**
+    - 테이블명: `exchange_rates`
+    - 용도: 한국수출입은행 Open API(AP01 - 현재 환율)에서 수집한 환율 정보를 일별로 저장
+    - 주요 컬럼:
+        - `as_of_date` (DATE): 환율 기준일 (예: `2026-01-21`)
+        - `cur_unit` (VARCHAR(20)): 통화 코드 (예: `USD`, `JPY(100)`)
+        - `cur_nm` (VARCHAR(100)): 국가/통화명 (예: `미국 달러`)
+        - `deal_bas_r` (NUMERIC(18,6)): 매매 기준율
+        - `ttb`, `tts`, `bkpr`, `kftc_deal_bas_r`, `kftc_bkpr` (선택): 수출입은행 원본 필드
+        - `created_at`, `updated_at` (TIMESTAMP)
+    - 제약:
+        - `(as_of_date, cur_unit)` 유니크 인덱스(`ux_exchange_rates_asof_curunit`)로 Upsert 기준 키를 고정
+    - 변환 규칙:
+        - Open API의 숫자 문자열(`deal_bas_r` 등)은 콤마 제거 후 `BigDecimal`로 파싱해서 저장
+
 ---
 
 ## 6. API 상세 설계
@@ -274,7 +295,54 @@ erDiagram
 | GET    | `/api/v1/calc/dividend` | 보유 종목 기반 예상 배당금 및 세금 계산 |
 | GET    | `/api/v1/calc/tax`      | 실현 수익 기반 예상 양도소득세 계산     |
 
-### 6.5 Auth API (기존 유지)
+#### 6.4.1 배당/세금 계산 쿼리 파라미터 (1차 버전)
+
+- **공통 전제**
+    - Calc 내부 계산은 **USD 기준**으로 수행한다.
+    - 통화 변환(`currency` 파라미터, `fxAsOf`, `fxRateUsed`)은 향후 `exchange_rates` 테이블을 사용해 확장할 계획이며, 현재 버전에서는 응답의 `currency`를 `null`로 유지한다.
+
+- **GET `/api/v1/calc/dividend`**
+    - **Query**
+        - `assumedDividendYield?: number` — 배당 수익률 (예: `0.03` = 3%)
+        - `dividendPerShare?: number` — 주당 배당액 (현재 버전에서는 미사용, 향후 종목별 포지션 기반 계산에서 활용 예정)
+        - `taxRate?: number` — 배당소득세 세율 (예: `0.154` = 15.4%)
+    - **처리**
+        - 기준 금액: 지갑의 `wallet.totalAssets` (USD 기준)
+        - `totalDividend = totalAssets × assumedDividendYield` (assumedDividendYield가 없으면 0)
+        - `withholdingTax = totalDividend × taxRate` (taxRate가 없으면 0)
+        - `netDividend = totalDividend - withholdingTax`
+
+- **GET `/api/v1/calc/tax`**
+    - **Query**
+        - `taxRate?: number` — 양도소득세 세율 (예: `0.22` = 22%)
+    - **처리**
+        - 기준 금액: 지갑의 `wallet.realizedProfit` (USD 기준)
+        - `taxBase = max(realizedProfit, 0)`
+        - `estimatedTax = taxBase × taxRate` (taxRate가 없으면 0)
+
+> 다통화(calc `currency` 파라미터, 환율 기반 변환)는 `docs/FRONTEND_API_WIRING.md` 및 `plans/fx-batch-and-multi-currency-calc`에 Future work로 명시되어 있으며, 향후 `exchange_rates` 테이블과 `/api/v1/exchange-rates` API를 기반으로 확장된다.
+
+### 6.5 Exchange Rate API (신규) 🆕
+
+프론트엔드 `/calculator` 페이지와 통화 선택 UI, 향후 다통화 Calc 지원을 위한 환율 조회 API.
+
+| 메서드 | 경로                             | 설명                                       |
+| ------ | -------------------------------- | ------------------------------------------ |
+| GET    | `/api/v1/exchange-rates`        | 특정 일자의 환율 리스트 조회 (`date` 쿼리) |
+| GET    | `/api/v1/exchange-rates/latest` | 가장 최근 기준일(`as_of_date`) 환율 조회    |
+
+- **GET `/api/v1/exchange-rates`**
+    - Query:
+        - `date?: string(yyyy-MM-dd)` — 지정하지 않으면 오늘 날짜 기준(주말 보정 포함)
+    - Response (요약):
+        - `asOf: string(yyyy-MM-dd)` — 환율 기준일
+        - `items: { curUnit, curNm, dealBasR, ttb, tts }[]`
+
+- **GET `/api/v1/exchange-rates/latest`**
+    - Query 없음
+    - `exchange_rates`에서 `as_of_date`가 가장 큰 레코드 기준으로 동일 형식 응답
+
+### 6.6 Auth API (기존 유지)
 
 | 메서드 | 경로                  | 설명                              |
 | ------ | --------------------- | --------------------------------- |
@@ -301,6 +369,13 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
 - **흐름**: Frontend에서 Provider SDK로 토큰 획득 → `POST /api/v1/auth/oauth/kakao` (Body: accessToken) → Backend 검증 및 JWT 발급.
 - **장점**: 모바일 네이티브 SDK 활용 용이, 유연한 UI 제어.
 - **구현**: `AuthController`의 `kakaoLogin`, `googleLogin` 엔드포인트.
+
+#### C. Kakao 스코프·프로비저닝 규칙 (2026-01-20)
+
+- **동의 스코프**: `profile_nickname` **단일 필수**. `account_email` 요청 없음.
+- **이메일 처리**: Kakao 응답에 이메일이 없으면 백엔드가 `kakao-{timestamp}-{random}@auth.madcamp02.local` 형태로 생성하고, 중복 시 재생성하여 저장.
+- **닉네임 처리**: 닉네임이 비어 있으면 `kakao-user-{random}` 임의 닉네임 부여.
+- **가입/로그인 분기**: 이메일(임의 포함)로 사용자 조회 → 없으면 회원가입+지갑/기본 관심종목 생성, 있으면 로그인. 응답 `isNewUser`로 프론트가 온보딩(`/onboarding`) 리다이렉트 여부 결정.
 
 ---
 
@@ -395,10 +470,10 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
 | ---------- | ------ | -------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | **Auth**   | 100%   | ✅ Complete    | Hybrid 인증 인터페이스(Backend/Frontend Driven) 확정. 프론트 `/oauth/callback` 및 토큰 저장/갱신 연동은 Phase 1에서 진행. |
 | **User**   | 80%    | ⚠️ Update Req  | 기본 엔티티 존재하나 `is_public` 등 신규 필드 누락됨.                                                                     |
-| **Market** | 0%     | ⬜ Pending     | Controller/Service 미구현.                                                                                                |
+| **Market** | 100%   | ✅ Complete    | Phase 3.4~3.6 구현 완료: Indices/News/Movers REST + Redis 캐싱, ETF 지수 규약 반영.                                      |
 | **Trade**  | 100%   | ✅ Complete    | Phase 4: Trade/Portfolio Engine 완전 구현(트랜잭션/비관적 락, 동시성 테스트 포함).                                         |
 | **Game**   | 100%   | ✅ Complete    | Phase 5 구현 완료(Shop/Gacha/Inventory/Ranking). 프론트는 현재 모의데이터 상태이므로 Phase 5.5에서 실데이터 연동 필요.    |
-| **Realtime**| 90%   | 🚧 In Progress | Phase 5.6(구독 관리자) + Phase 6(Finnhub Trades WebSocket/Redis/STOMP 브로드캐스트) 구현 완료. `/topic/stock.indices`, `/user/queue/trade`는 향후 구현. |
+| **Realtime**| 100%  | ✅ Complete    | Phase 6 완료: Finnhub Trades WebSocket + `/topic/stock.indices` + `/user/queue/trade` 브로드캐스트 구현 완료. Watchlist API 구현 완료. |
 | **AI**     | 0%     | ⬜ Pending     | FastAPI 연동 미구현.                                                                                                      |
 
 ---
@@ -448,8 +523,13 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
 - **엔드포인트**:
   - `GET /api/v1/user/me` (`UserMeResponse`, email 포함)
   - `PUT /api/v1/user/me` (nickname, is_public, is_ranking_joined 등)
-  - `POST /api/v1/user/onboarding` (정밀 사주 계산: 성별/양력음력/시간 포함)
+  - `POST /api/v1/user/onboarding` (정밀 사주 계산: 성별/양력음력/시간 포함).  
+    → 이 엔드포인트는 **최초 온보딩과 마이페이지에서의 사주 정보 재계산(재온보딩)**을 모두 처리하는 **단일 idempotent 진입점**으로 사용된다. 동일 사용자에 대해 반복 호출 시 `users.birth_date/birth_time/gender/calendar_type/saju_element/zodiac_sign` 컬럼을 새 입력값 기준으로 항상 덮어쓴다.
   - `GET /api/v1/user/wallet`
+- **온보딩 완료 해석 규칙 및 소셜 플래그 역할**
+  - 온보딩 완료 여부는 별도의 boolean 컬럼 없이, `users.birth_date IS NOT NULL` 이고 `users.saju_element IS NOT NULL`인 경우로 해석한다.
+  - 프론트엔드는 `/api/v1/auth/me` 또는 `/api/v1/user/me` 응답을 기반으로 동일한 규칙을 사용해 `hasCompletedOnboarding(user)`를 계산하며, 메인 기능 접근 전 온보딩을 강제한다.
+  - 소셜 로그인 응답 DTO의 `isNewUser` 플래그는 **라우팅 힌트**로만 사용되며, 권한/보안 판단은 항상 JWT 및 DB 상태(`birth_date/saju_element`)를 기준으로 한다.
 - **DB 스키마 확장 (Flyway V4)**:
   - `users.birth_time` (TIME): 생년월일시 (기본값 00:00:00)
   - `users.gender` (VARCHAR): 성별 (MALE/FEMALE/OTHER)
@@ -478,17 +558,114 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
 
 ### 12.4.1 Phase 3.5: 데이터 전략 구현 (DATA_STRATEGY_PLAN 기반)
 
-- **DB 스키마 (Flyway V5)**:
-  - `stock_candles` 테이블: `symbol`, `date` (복합 PK), `open/high/low/close`, `volume`, `last_updated`
+**구현 완료**: Market Movers Redis 캐싱 (1-5분 TTL)
+
+### 12.4.2 Phase 3.6: 백엔드 Redis 캐싱 확장 (Market Indices/News/Movers) 🆕
+
+**목표**: 프론트엔드 localStorage 캐싱과 연계하여 이중 캐싱 전략으로 API 실패 시에도 안정적인 데이터 제공
+
+**구현 대상**: `MarketService`의 `getIndices()`, `getNews()`, `getMovers()` 메서드
+
+**Redis 캐싱 전략**:
+
+1. **캐시 키 패턴**:
+   - `market:indices` - 시장 지수 데이터
+   - `market:news` - 시장 뉴스 데이터
+   - `market:movers` - 시장 동향 데이터 (이미 구현됨)
+
+2. **TTL 설정**:
+   - **Market Indices**: 1분 (60초) - 실시간성이 중요하지만 외부 API 호출 비용 절감
+   - **Market News**: 5분 (300초) - 뉴스는 상대적으로 업데이트 빈도가 낮음
+   - **Market Movers**: 1-5분 (기존 구현 유지) - 시장 변동성이 높을 때는 짧게, 낮을 때는 길게
+
+3. **캐시 동작 흐름**:
+   ```mermaid
+   flowchart TD
+       A[GET /api/v1/market/indices] --> B[Redis 캐시 확인]
+       B -->|Hit| C[캐시된 데이터 반환 + X-Cache-Status: HIT]
+       B -->|Miss| D[Finnhub API 호출]
+       D -->|Success| E[Redis에 저장 TTL: 1분]
+       D -->|Failure| F{이전 캐시 있음?}
+       F -->|Yes| G[Stale 캐시 반환 + X-Cache-Status: STALE]
+       F -->|No| H[에러 응답]
+       E --> I[데이터 반환 + X-Cache-Status: MISS]
+       G --> I
+   ```
+
+4. **응답 헤더 추가**:
+   - `X-Cache-Status`: `HIT` (캐시에서 조회), `MISS` (API 호출), `STALE` (만료되었지만 사용)
+   - `X-Cache-Age`: 캐시 생성 후 경과 시간 (초 단위)
+   - `X-Data-Freshness`: 데이터 신선도 (`FRESH`, `STALE`, `EXPIRED`)
+
+5. **Stale 데이터 처리**:
+   - Redis TTL 만료 후에도 데이터를 `market:indices:stale` 키로 추가 저장 (TTL: 1시간)
+   - API 실패 시 Stale 데이터 반환하여 프론트엔드가 최소한의 데이터라도 표시 가능
+   - Stale 데이터 반환 시 `X-Cache-Status: STALE` 헤더 포함
+
+6. **구현 상세**:
+   - `MarketService`에 `@Cacheable` 어노테이션 또는 수동 Redis 캐싱 로직 추가
+   - `RedisTemplate` 또는 `@Cacheable` 사용 (Spring Cache Abstraction)
+   - 캐시 키는 `CACHE_KEY_PREFIX` 상수로 관리
+   - 에러 발생 시 Fallback으로 Stale 캐시 조회
+
+7. **프론트엔드 연계**:
+   - 프론트엔드는 `X-Cache-Status` 헤더를 확인하여 캐시 상태 표시
+   - `STALE` 상태일 때는 "캐시된 데이터" 알림 표시
+   - 프론트엔드 localStorage 캐시는 백엔드 응답을 받으면 항상 업데이트
+   - 백엔드 Redis 캐시가 있으면 프론트엔드 localStorage 캐시도 함께 갱신
+
+**예상 효과**:
+- 외부 API 호출 횟수 감소 (Redis 캐시 Hit 시)
+- API 실패 시에도 Stale 데이터로 서비스 지속성 보장
+- 프론트엔드와 백엔드 이중 캐싱으로 안정성 극대화
+- 네트워크 지연 감소 (캐시 Hit 시)
+
+**구현 우선순위**: High (프론트엔드 캐싱과 함께 사용 시 효과 극대화)
+
+**참고**: 프론트엔드에서 이미 localStorage 기반 캐싱을 구현했으므로, 백엔드 Redis 캐싱은 추가적인 안정성 레이어로 작동합니다.
+
+- **DB 스키마 (Flyway V5, V8)**:
+  - `stock_candles` 테이블: `symbol`, `date`, `period` (복합 PK), `open/high/low/close`, `volume`, `last_updated`
+    - `period` 필드: `d` (daily), `w` (weekly), `m` (monthly) - V8 마이그레이션으로 추가
   - `api_usage_logs` 테이블: `provider`('EODHD'), `call_date`, `count`
 - **EODHD Client 구현**:
-  - `EodhdClient`: RestTemplate 기반, `getHistoricalData(symbol)` 메서드
-  - `QuotaManager`: 일일 호출 횟수 체크 및 DB 기록 로직
-- **StockService.getCandles() 개선**:
-  - Step 1: DB 조회
-  - Step 2: 데이터 최신성 체크 (오늘 장 종료 후 오늘 데이터 존재 여부)
-  - Step 3: Quota 체크 → EODHD 호출 또는 기존 데이터 반환
-  - Step 4: Quota 초과 시 Case A(기존 데이터 반환 + Stale 표시) 또는 Case B(429 에러)
+  - `EodhdClient`: RestTemplate 기반, `getHistoricalData(ticker, fromDate, toDate, period, order)` 메서드
+  - `warning` 필드 처리: 무료 구독 제한(최근 1년) 경고 메시지 필터링
+  - `QuotaManager`: 일일 호출 횟수 체크 및 DB 기록 로직 (일일 20회 제한)
+- **StockService.getCandles() 구현 완료**:
+  
+  **엔드포인트**: `GET /api/v1/stock/candles/{ticker}`
+  
+  **Request 파라미터**:
+  - `ticker` (path): 종목 심볼 (예: "AAPL")
+  - `resolution` (query): 시간 간격 (`d`=daily, `w`=weekly, `m`=monthly)
+  - `from` (query): 시작 시간 (ISO-8601 형식, 예: "2024-01-19T00:00:00Z")
+  - `to` (query): 종료 시간 (ISO-8601 형식, 예: "2026-01-19T23:59:59Z")
+  
+  **Response DTO**: `StockCandlesResponse`
+  - `ticker`: 종목 심볼
+  - `resolution`: 요청한 시간 간격
+  - `items`: 캔들 데이터 리스트 (`timestamp`, `open`, `high`, `low`, `close`, `volume`)
+  - `stale`: 데이터가 구식인지 여부 (Quota 초과 시 기존 데이터 반환 표시)
+  
+  **구현 상세**:
+  - ✅ Step 1: 날짜 범위 필터링 (from/to 파라미터를 LocalDate로 변환하여 DB 조회)
+  - ✅ Step 2: DB 조회 시 날짜 범위 필터링 (`findAllBySymbolAndPeriodAndDateBetweenOrderByDateAsc`)
+  - ✅ Step 3: 배치 로드 전략
+    - 전체 배치 로드: d 데이터가 없을 때 d, w, m 모두 한번에 가져오기 (Quota 1회만 카운트)
+    - 부분 배치 로드: d는 있지만 w, m 중 일부가 없을 때 누락된 것만 가져오기 (Quota 1회만 카운트)
+    - 개별 보완: 요청된 resolution만 개별적으로 가져오기
+  - ✅ Step 4: EODHD API 호출 시 날짜 범위 전달 (`getHistoricalData(ticker, fromDate, toDate, period, order)`)
+  - ✅ Step 5: DB 저장 시 날짜 범위 데이터만 저장 (UPSERT 전략, `period` 필드 포함)
+  - ✅ Step 6: 응답 데이터 필터링 (요청한 날짜 범위의 데이터만 반환)
+  - ✅ Step 7: 데이터 최신성 체크 (오늘 장 종료 후 오늘 데이터 존재 여부)
+  - ✅ Step 8: Quota 체크 → EODHD 호출 또는 기존 데이터 반환
+  - ✅ Step 9: Quota 초과 시 Case A(기존 데이터 반환 + `stale=true` 표시) 또는 Case B(429 에러)
+  
+  **⚠️ 주의사항**:
+  - **EODHD 무료 구독 제한**: 최근 1년 데이터만 제공. 1년 이전 날짜 범위 요청 시 `warning` 필드가 포함될 수 있음
+  - **경고 메시지 처리**: EODHD API 응답의 `warning` 필드는 필터링하여 유효한 캔들 데이터만 저장
+  - **티커 형식**: EODHD API는 `{SYMBOL}.{EXCHANGE_ID}` 형식 권장 (예: `AAPL.US`). 거래소 코드가 없으면 자동으로 `.US` 추가
 - **초기 구축 전략 (Seed Data)**:
   - 서버 시작 시점이 아니라, **"최초 요청 시"** 또는 **"관리자 트리거"**로 인기 종목(Top 10)만 우선 적재
   - 비인기 종목은 요청이 들어올 때 쿼터가 남으면 적재
@@ -516,10 +693,10 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
         I --> J[상위 5개 반환]
         J --> K[MarketMoversResponse]
     ```
-  - **향후 확장 가능성** (Phase 10 계획):
-    1. **관리자 API**: 종목 리스트 업데이트 엔드포인트 (Phase 10.1)
-    2. **자동 갱신**: 스케줄러로 시가총액 순위 자동 업데이트 (Phase 10.2)
-    3. **다른 시장**: 한국/일본 등 다른 시장의 Top 20 추가 (Phase 10.3)
+  - **향후 확장 가능성** (Phase 9 계획):
+    1. **관리자 API**: 종목 리스트 업데이트 엔드포인트 (Phase 9.1)
+    2. **자동 갱신**: 스케줄러로 시가총액 순위 자동 업데이트 (Phase 9.2)
+    3. **다른 시장**: 한국/일본 등 다른 시장의 Top 20 추가 (Phase 9.3)
 
 ### 12.5 Phase 4: Trade/Portfolio Engine (프론트 `/trade`, `/portfolio` 완성)
 
@@ -747,16 +924,19 @@ sequenceDiagram
 - ✅ 테스트: 단위 테스트 및 통합 테스트 작성
 
 **토픽(프론트 문서 기준)**:
-- `/topic/stock.indices` (향후 구현)
+- `/topic/stock.indices` (구현 완료)
 - `/topic/stock.ticker.{ticker}` (구현 완료)
-- `/user/queue/trade` (향후 구현)
+- `/user/queue/trade` (구현 완료)
 
-### 12.8 Phase 7: AI(SSE) 연동 (프론트 `/oracle`)
+**추가 구현 내용 (2026-01-19)**:
+- ✅ `WatchlistService`: 관심종목 조회/추가/삭제 서비스 구현
+- ✅ `UserController`: `/api/v1/user/watchlist` 엔드포인트 추가 (GET/POST/DELETE)
+- ✅ `MarketIndicesBroadcastService`: 10초 주기로 `/topic/stock.indices` 브로드캐스트
+- ✅ `TradeService`: 거래 체결 시 `/user/queue/trade` 브로드캐스트 추가
+- ✅ `TradeNotificationDto`: 체결 알림 DTO 추가
+- ✅ `@EnableScheduling`: AppConfig에 스케줄러 활성화 추가
 
-- **구현 대상**: `ChatController`(SSE), `ChatHistory` 저장, AI 서버 프록시/클라이언트
-- **엔드포인트**: `POST /api/v1/chat/ask` (SSE 스트리밍)
-
-### 12.9 Phase 8: CI/CD + 테스트 전략 (후속, 품질 게이트 고정)
+### 12.8 Phase 7: CI/CD + 테스트 전략 (후속, 품질 게이트 고정)
 
 현재 CI의 `Build Test`는 `./gradlew clean build`를 수행하므로, **테스트가 실제로 실행**됩니다.  
 다만 `@SpringBootTest` 기반 통합 테스트는 Postgres/Redis/Flyway 등 외부 인프라 의존이 있어, CI에서 “항상 통과”시키려면 아래 중 하나를 선택해 고정해야 합니다.
@@ -772,7 +952,7 @@ sequenceDiagram
 
 ---
 
-### 12.10 Phase 9: 외부 API 확장 전략 (향후 개선)
+### 12.9 Phase 8: 외부 API 확장 전략 (향후 개선)
 
 현재 EODHD API는 무료 구독 제한(최근 1년 데이터만 제공)과 일일 호출 제한(20회)이 있어, 장기적인 데이터 제공에 한계가 있습니다.
 
@@ -801,12 +981,12 @@ sequenceDiagram
    - 비인기 종목은 Primary Provider만 사용하여 Quota 절약
 
 **구현 우선순위**:
-- Phase 9.1: `HistoricalDataProvider` 인터페이스 설계 및 EODHD를 Provider로 리팩토링
-- Phase 9.2: Alpha Vantage 또는 다른 무료 API Provider 추가 구현
-- Phase 9.3: `ProviderManager` 구현 및 자동 전환 로직
-- Phase 9.4: 데이터 병합 및 Fallback 메커니즘 구현
+- Phase 8.1: `HistoricalDataProvider` 인터페이스 설계 및 EODHD를 Provider로 리팩토링
+- Phase 8.2: Alpha Vantage 또는 다른 무료 API Provider 추가 구현
+- Phase 8.3: `ProviderManager` 구현 및 자동 전환 로직
+- Phase 8.4: 데이터 병합 및 Fallback 메커니즘 구현
 
-### 12.11 Phase 10: Market Movers 관리 기능 (향후 개선)
+### 12.10 Phase 9: Market Movers 관리 기능 (향후 개선)
 
 현재 `market_cap_stocks` 테이블의 종목 리스트는 초기 데이터로만 관리되고 있으며, 시가총액 순위는 변동될 수 있습니다.
 
@@ -825,9 +1005,14 @@ sequenceDiagram
    - 에러 처리: API 실패 시 기존 데이터 유지, 로그 기록
 
 **구현 우선순위**:
-- Phase 10.1: 관리자 API 구현 (인증/인가 포함)
-- Phase 10.2: 스케줄러 구현 및 외부 API 연동
-- Phase 10.3: 자동 갱신 로직 및 에러 처리
+- Phase 9.1: 관리자 API 구현 (인증/인가 포함)
+- Phase 9.2: 스케줄러 구현 및 외부 API 연동
+- Phase 9.3: 자동 갱신 로직 및 에러 처리
+
+### 12.11 Phase 10: AI(SSE) 연동 (프론트 `/oracle`) - 맨 뒤로 이동
+
+- **구현 대상**: `ChatController`(SSE), `ChatHistory` 저장, AI 서버 프록시/클라이언트
+- **엔드포인트**: `POST /api/v1/chat/ask` (SSE 스트리밍)
 
 ---
 
@@ -928,8 +1113,8 @@ sequenceDiagram
 
 ---
 
-**문서 버전:** 2.7.13 (Phase 6: Finnhub WebSocket 연동 완료)  
-**최종 수정일:** 2026-01-19
+**문서 버전:** 2.7.20 (온보딩 완료 해석 규칙 + `/auth/me`·`hasCompletedOnboarding` 구현 정합성 및 테스트 계정 비밀번호 정책 반영)  
+**최종 수정일:** 2026-01-21
 
 ---
 

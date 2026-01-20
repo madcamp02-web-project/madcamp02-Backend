@@ -17,8 +17,11 @@ package com.madcamp02.dto.request;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -26,6 +29,15 @@ import java.time.LocalTime;
 @Getter
 @NoArgsConstructor
 public class UserOnboardingRequest {
+
+    //------------------------------------------
+    // nickname (선택)
+    //------------------------------------------
+    // 온보딩 단계에서 닉네임을 함께 수정하고 싶을 때 사용
+    // - null 또는 빈 문자열이면 닉네임은 변경하지 않음
+    //------------------------------------------
+    @Size(max = 50, message = "닉네임은 최대 50자까지 가능합니다.")
+    private String nickname;
 
     //------------------------------------------
     // birthDate (필수)
@@ -45,7 +57,10 @@ public class UserOnboardingRequest {
     // 주의:
     // - 시간을 모르면 null로 보내면 서버에서 00:00:00으로 자동 설정
     //------------------------------------------
-    @Pattern(regexp = "^([01]\\d|2[0-3]):[0-5]\\d$", message = "birthTime은 HH:mm 형식이어야 합니다.")
+    @Pattern(
+            regexp = "^$|^([01]\\d|2[0-3]):[0-5]\\d$",
+            message = "birthTime은 비워두거나 HH:mm 형식이어야 합니다."
+    )
     private String birthTime;
 
     //------------------------------------------
@@ -71,6 +86,8 @@ public class UserOnboardingRequest {
     //------------------------------------------
     // null이면 00:00:00 반환
     //------------------------------------------
+    @JsonIgnore
+    @Schema(hidden = true)
     public LocalTime getBirthTimeAsLocalTime() {
         if (birthTime == null || birthTime.isEmpty()) {
             return LocalTime.of(0, 0); // 기본값 0시 정각

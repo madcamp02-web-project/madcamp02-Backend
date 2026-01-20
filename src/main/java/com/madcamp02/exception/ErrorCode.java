@@ -61,6 +61,14 @@ public enum ErrorCode {
     // USER_002: 이미 존재하는 사용자 (추가)
     USER_ALREADY_EXISTS(HttpStatus.CONFLICT, "USER_002", "이미 존재하는 사용자입니다."),
 
+    // ========== 온보딩 관련 (ONBOARDING) ==========
+    // ONBOARDING_001: 온보딩 입력값 오류 (날짜/시간 형식, 지원하지 않는 gender/calendarType 등)
+    ONBOARDING_INVALID_INPUT(HttpStatus.BAD_REQUEST, "ONBOARDING_001", "온보딩 입력값이 올바르지 않습니다."),
+    // ONBOARDING_002: 음력→양력 변환 실패 (한국천문연구원 API 연동 오류)
+    ONBOARDING_LUNAR_CONVERT_FAILED(HttpStatus.BAD_REQUEST, "ONBOARDING_002", "음력/양력 변환 과정에서 오류가 발생했습니다."),
+    // ONBOARDING_003: 사주 계산 내부 오류 (SajuCalculator 단계)
+    ONBOARDING_SAJU_CALC_FAILED(HttpStatus.BAD_REQUEST, "ONBOARDING_003", "사주 계산 중 오류가 발생했습니다."),
+
     // ========== 서버 에러 (SERVER) ==========
     // SERVER_001: 내부 서버 오류
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "SERVER_001", "내부 서버 오류가 발생했습니다."),

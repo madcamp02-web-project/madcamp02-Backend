@@ -26,9 +26,11 @@ import com.madcamp02.dto.response.UserWalletResponse;
 import com.madcamp02.exception.ErrorCode;
 import com.madcamp02.exception.UserException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -37,9 +39,9 @@ public class UserService {
     private final WalletRepository walletRepository;
     private final SajuCalculator sajuCalculator;
 
-    //------------------------------------------
+    // ------------------------------------------
     // 내 프로필 조회 (GET /api/v1/user/me)
-    //------------------------------------------
+    // ------------------------------------------
     @Transactional(readOnly = true)
     public UserMeResponse getMe(Long userId) {
         User user = userRepository.findById(userId)
@@ -48,12 +50,12 @@ public class UserService {
         return toMeResponse(user);
     }
 
-    //------------------------------------------
+    // ------------------------------------------
     // 내 프로필/설정 수정 (PUT /api/v1/user/me)
-    //------------------------------------------
+    // ------------------------------------------
     // 부분 업데이트 전략:
     // - Request에서 null인 필드는 "변경하지 않음"
-    //------------------------------------------
+    // ------------------------------------------
     @Transactional
     public UserMeResponse updateMe(Long userId, UserUpdateRequest request) {
         User user = userRepository.findById(userId)
@@ -81,50 +83,85 @@ public class UserService {
         return toMeResponse(user);
     }
 
-    //------------------------------------------
+    // ------------------------------------------
     // 온보딩 (POST /api/v1/user/onboarding)
-    //------------------------------------------
+    // ------------------------------------------
     // 처리 과정:
-    //  1) 정밀 사주 계산 (성별/양력음력/시간 포함)
-    //  2) birthDate, birthTime, gender, calendarType 저장
-    //  3) SajuCalculator로 오행/띠 계산
-    //  4) users.saju_element, users.zodiac_sign 저장
-    //------------------------------------------
+    // 1) 정밀 사주 계산 (성별/양력음력/시간 포함)
+    // 2) birthDate, birthTime, gender, calendarType 저장
+    // 3) SajuCalculator로 오행/띠 계산
+    // 4) users.saju_element, users.zodiac_sign 저장
+    // ------------------------------------------
     @Transactional
     public UserMeResponse onboarding(Long userId, UserOnboardingRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserException(ErrorCode.USER_NOT_FOUND));
 
-        // 정밀 사주 계산
-        SajuCalculator.SajuInput input = SajuCalculator.SajuInput.builder()
-                .birthDate(request.getBirthDate())
-                .birthTime(request.getBirthTimeAsLocalTime())
-                .gender(request.getGender())
-                .calendarType(request.getCalendarType())
-                .build();
+        // 닉네임이 함께 넘어온 경우, 온보딩과 동시에 닉네임도 갱신
+        if (request.getNickname() != null && !request.getNickname().isEmpty()) {
+            user.updateNickname(request.getNickname());
+        }
 
-        SajuCalculator.SajuResult result = sajuCalculator.calculatePrecise(input);
+        SajuCalculator.SajuResult result;
+        try {
+            // 정밀 사주 계산 입력값 구성
+            SajuCalculator.SajuInput input = SajuCalculator.SajuInput.builder()
+                    .birthDate(request.getBirthDate())
+                    .birthTime(request.getBirthTimeAsLocalTime())
+                    .gender(request.getGender())
+                    .calendarType(request.getCalendarType())
+                    .build();
+
+            // 정밀 사주 계산 (음력/양력 변환 + 4주 계산)
+            result = sajuCalculator.calculatePrecise(input);
+        } catch (IllegalArgumentException e) {
+            // 입력값 자체가 잘못된 경우 (날짜/시간 형식 등)
+            throw new UserException(ErrorCode.ONBOARDING_INVALID_INPUT);
+        } catch (IllegalStateException e) {
+            // convertToSolar 단계에서 래핑한 예외 식별
+            if ("LUNAR_CONVERT_FAILED".equals(e.getMessage())) {
+                throw new UserException(ErrorCode.ONBOARDING_LUNAR_CONVERT_FAILED);
+            }
+            throw new UserException(ErrorCode.ONBOARDING_SAJU_CALC_FAILED);
+        } catch (Exception e) {
+            // 그 외 예기치 못한 사주 계산 오류
+            throw new UserException(ErrorCode.ONBOARDING_SAJU_CALC_FAILED);
+        }
 
         // 온보딩은 "한 번에" 완료 처리하는게 안전합니다.
         // (중간 저장/중간 실패가 나면, birthDate만 들어가고 saju가 비는 불완전 상태가 될 수 있음)
         // 이를 예방하게 메서드로 체크
-        user.completeOnboarding(
-                request.getBirthDate(),
-                request.getBirthTimeAsLocalTime(),
-                request.getGender(),
-                request.getCalendarType(),
-                result.getSajuElement(),
-                result.getZodiacSign()
-        );
+        try {
+            user.completeOnboarding(
+                    request.getBirthDate(),
+                    request.getBirthTimeAsLocalTime(),
+                    request.getGender(),
+                    request.getCalendarType(),
+                    result.getSajuElement(),
+                    result.getZodiacSign());
 
-        userRepository.save(user);
+            userRepository.save(user);
+            userRepository.flush(); // 즉시 DB 반영하여 예외를 이 블록 안에서 잡도록 함
+        } catch (Exception e) {
+            // 저장/업데이트 단계에서 터지는 예외(DB 제약/컬럼 불일치 등)는 500으로 올리기보다
+            // 온보딩 실패로 일관되게 처리하여 프론트가 사용자에게 안내할 수 있게 한다.
+            log.error("온보딩 저장 단계 실패 - userId={}, birthDate={}, birthTime={}, gender={}, calendarType={}, nickname={}",
+                    userId,
+                    request.getBirthDate(),
+                    request.getBirthTime(),
+                    request.getGender(),
+                    request.getCalendarType(),
+                    request.getNickname(),
+                    e);
+            throw new UserException(ErrorCode.ONBOARDING_SAJU_CALC_FAILED, "온보딩 저장 중 오류가 발생했습니다.");
+        }
 
         return toMeResponse(user);
     }
 
-    //------------------------------------------
+    // ------------------------------------------
     // 지갑 정보 조회 (GET /api/v1/user/wallet)
-    //------------------------------------------
+    // ------------------------------------------
     @Transactional
     public UserWalletResponse getWallet(Long userId) {
         Wallet wallet = walletRepository.findByUserUserId(userId)
@@ -145,9 +182,9 @@ public class UserService {
                 .build();
     }
 
-    //------------------------------------------
+    // ------------------------------------------
     // Entity -> Response 변환 메서드
-    //------------------------------------------
+    // ------------------------------------------
     private UserMeResponse toMeResponse(User user) {
         return UserMeResponse.builder()
                 .userId(user.getUserId())
@@ -166,4 +203,3 @@ public class UserService {
                 .build();
     }
 }
-

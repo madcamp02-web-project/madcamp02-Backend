@@ -155,6 +155,16 @@ public class StockSubscriptionManager {
         return null; // 모두 활성 상태
     }
 
+    /**
+     * 활성 구독 중인 종목 목록 반환
+     * 
+     * @return 활성 구독 중인 종목 심볼 Set (구독자가 1명 이상인 종목)
+     */
+    public Set<String> getActiveTickers() {
+        // tickerSubscribers의 keySet을 반환 (구독자가 있는 종목만)
+        return new HashSet<>(tickerSubscribers.keySet());
+    }
+
     // 모니터링/디버깅용
     public int getActiveSessionCount() {
         return sessionSubscriptions.size();

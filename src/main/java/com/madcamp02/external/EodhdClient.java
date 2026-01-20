@@ -93,15 +93,21 @@ public class EodhdClient {
     // Historical Data 조회
     // ------------------------------------------
     // EODHD API 공식 문서: https://eodhd.com/financial-apis/api-for-historical-data-and-volumes/
-    // GET /eod/{ticker}?api_token={key}&fmt=json&from={date}&to={date}&period={d|w|m}&order={a|d}
     // 
+    // 엔드포인트 형식:
+    //   GET https://eodhd.com/api/eod/{ticker}
+    //
     // 파라미터:
-    //   - api_token: API Key (필수)
-    //   - fmt: 'json' 또는 'csv' (기본값: 'csv')
-    //   - period: 'd' (daily), 'w' (weekly), 'm' (monthly) (기본값: 'd')
-    //   - order: 'a' (ascending), 'd' (descending) (기본값: 'a')
-    //   - from: YYYY-MM-DD 형식 (선택)
-    //   - to: YYYY-MM-DD 형식 (선택)
+    //   - ticker (path): 종목 심볼 (예: AAPL.US) - {SYMBOL}.{EXCHANGE_ID} 형식
+    //   - api_token (query): API Key (필수)
+    //   - fmt (query): 'json' 또는 'csv' (기본값: 'json', 이 구현에서는 'json' 사용)
+    //   - period (query): 'd' (daily), 'w' (weekly), 'm' (monthly) (기본값: 'd')
+    //   - order (query): 'a' (ascending), 'd' (descending) (기본값: 'a')
+    //   - from (query): 시작 날짜 YYYY-MM-DD 형식 (선택)
+    //   - to (query): 종료 날짜 YYYY-MM-DD 형식 (선택)
+    //
+    // 예시:
+    //   GET /eod/AAPL.US?api_token={key}&fmt=json&from=2020-01-01&to=2020-12-31&period=d&order=a
     // ------------------------------------------
     public List<EodhdCandle> getHistoricalData(String ticker, LocalDate from, LocalDate to) {
         return getHistoricalData(ticker, from, to, "d", "a");

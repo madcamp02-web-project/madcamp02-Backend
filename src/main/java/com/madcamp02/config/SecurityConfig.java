@@ -53,6 +53,7 @@ Spring이 "내가 미리 만들어 놓을 테니 필요할 때 가져다 써!"�
 
 import com.madcamp02.security.JwtAuthenticationFilter;
 import com.madcamp02.security.JwtTokenProvider;
+import com.madcamp02.security.OAuth2FailureHandler;
 import com.madcamp02.security.OAuth2SuccessHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -63,8 +64,6 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -122,6 +121,7 @@ import java.util.List;
 public class SecurityConfig {
     private final JwtTokenProvider jwtTokenProvider;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
+    private final OAuth2FailureHandler oAuth2FailureHandler;
 
     // 공개 엔드포인트 (인증 불필요) //일종의 예외라고 생각하면 됨, 출입 명부 면제 리스트이다.
     private static final String[] PUBLIC_ENDPOINTS = {
@@ -203,15 +203,10 @@ public class SecurityConfig {
                 // 사용자가 /oauth2/authorization/kakao 또는 /oauth2/authorization/google 접근 시
                 // 해당 OAuth2 제공자의 로그인 페이지로 리다이렉트
                 // 로그인 성공 시 OAuth2SuccessHandler가 JWT 발급 후 프론트엔드로 리다이렉트
+                // 로그인 실패 시 OAuth2FailureHandler가 프론트엔드로 에러와 함께 리다이렉트
                 .oauth2Login(oauth2 -> oauth2
                         .successHandler(oAuth2SuccessHandler) // 로그인 성공 시 JWT 발급 핸들러
-                        .failureHandler((request, response, exception) -> {
-                            // 로그인 실패 시 에러 응답
-                            response.setStatus(401);
-                            response.setContentType("application/json;charset=UTF-8");
-                            response.getWriter().write("{\"error\": \"OAuth2 Login Failed\", \"message\": \""
-                                    + exception.getMessage() + "\"}");
-                        }))
+                        .failureHandler(oAuth2FailureHandler)) // 로그인 실패 시 프론트엔드 리다이렉트 핸들러
 
                 // 예외 처리
                 .exceptionHandling(exception -> exception
@@ -280,10 +275,4 @@ public class SecurityConfig {
     }
     // 로그인 로직(Service)에서 "이 ID/PW 맞는지 확인해줘"라고 시킬 때 사용하는 관리자를 스프링 빈으로 등록
 
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
-    // BCrypt라는 강력한 알고리즘으로 암호화(해싱)해 주는 도구를 등록합니다.
-    // "1234"를 입력하면 sdj2189dsa... 같은 난수로 바꿔줌
 }

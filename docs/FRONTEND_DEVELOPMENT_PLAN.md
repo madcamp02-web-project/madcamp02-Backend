@@ -1,6 +1,6 @@
 # 🎨 MadCamp02: 프론트엔드 개발 계획서
 
-**Ver 2.7.12 - Frontend Development Blueprint (Spec-Driven Alignment)**
+**Ver 2.7.18 - Frontend Development Blueprint (Spec-Driven Alignment)**
 
 ---
 
@@ -24,6 +24,13 @@
 | **2.7.10** | **2026-01-19** | **Phase 5 백엔드 구현 완료 연동 안내(Shop/Gacha/Inventory/Ranking)** | **MadCamp02** |
 | **2.7.11** | **2026-01-19** | **프론트 2.7.11 스냅샷 + Phase 5 완료 기반 “Phase 5.5: 프론트 연동·DB 제약 보강” 체크리스트 고정(Shop/Gacha/Inventory/Ranking 실데이터 전환, `{items:[]}`·카테고리/ETF/STOMP 정합성 재확인)** | **MadCamp02** |
 | **2.7.12** | **2026-01-19** | **백엔드 Phase 4~6 구현 기준 Trade/Portfolio/Game/Realtime(WebSocket) DTO·에러 처리·토픽/endpoint 문구를 FULL_SPEC 및 BACKEND 계획서와 정합하게 보정** | **MadCamp02** |
+| **2.7.13** | **2026-01-19** | **Phase 3.6: 백엔드 Redis 캐싱 확장 및 프론트엔드 이중 캐싱 전략 수립 (X-Cache-Status 헤더 처리)** | **MadCamp02** |
+| **2.7.15** | **2026-01-20** | **실 구현 현황 최신화: 모든 주요 라우트/스토어가 실제 REST API 및 `/ws-stomp` 클라이언트와 연결됨을 반영, 온보딩 필드·OAuth 콜백·캐시 헤더 처리 정합성 수정** | **MadCamp02** |
+| **2.7.16** | **2026-01-20** | **Kakao 동의 스코프를 `profile_nickname` 단일로 축소하고, 이메일은 백엔드가 임의 생성하도록 가이드. OAuth 콜백에서 `isNewUser`면 `/onboarding`으로 즉시 리다이렉트하도록 최초 로그인 플로우 명시(구글/카카오 공통).** | **MadCamp02** |
+| **2.7.17** | **2026-01-20** | **마이페이지에서 생년월일/시간/성별/달력 타입/닉네임을 수정 후 `POST /api/v1/user/onboarding`을 호출해 사주를 재계산하는 재온보딩 플로우를 명시하고, 온보딩 페이지와 동일 DTO/스토어 동기화 규칙으로 통일.** | **MadCamp02** |
+| **2.7.18** | **2026-01-20** | **일반 회원가입 성공 시 자동 로그인 후 `/onboarding`으로 직행하도록 플로우를 고정하고, `hasCompletedOnboarding(user)`(= `birthDate + sajuElement`) 기반 온보딩 강제/라우팅 규칙 및 Investment Style의 프론트 전용 필드 성격을 문서화.** | **MadCamp02** |
+| **2.7.19** | **2026-01-21** | **계산기(`/calculator`) 페이지의 Calc API 연동(배당/세금 계산 1차 버전) 및 환율 조회 API(`/api/v1/exchange-rates`) 활용 계획, 다통화(currency) 확장 Future work를 문서에 반영.** | **MadCamp02** |
+| **2.7.20** | **2026-01-21** | **`auth-store.checkAuth()`가 `/api/v1/auth/me`의 `AuthResponse`를 프론트 `User` 타입으로 매핑하도록 구현(`id/email/nickname/provider/avatarUrl/birthDate/sajuElement` 등)하여, `hasCompletedOnboarding(user)`(= `!!user.birthDate && !!user.sajuElement`)와 `AuthGuard`의 온보딩 강제/차단 로직이 실제 동작과 일치하도록 정합성을 확보. 온보딩 완료 후 “Enter Dashboard” 시 더 이상 `/onboarding`으로 되돌아가지 않음을 확인.** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -174,7 +181,7 @@ src/
 │   └── onboarding/              # 온보딩 (사주 정보 입력)
 ├── components/
 │   ├── dashboard/               # 대시보드용 위젯
-│   ├── news/                    # Market 관련 컴포넌트 (현 구현: `news/`, 정합성 목표: `market/`로 정리)
+│   ├── market/                  # Market 관련 카드/리스트
 │   ├── trade/                   # Trade 관련 (호가창, 차트)
 │   ├── gacha/                   # Shop/Gacha 관련
 │   ├── oracle/                  # AI 채팅 관련
@@ -182,17 +189,24 @@ src/
 │   └── ui/                      # 공통 UI (Button, Input, Modal)
 ├── lib/
 │   ├── api/                     # API 호출 모듈 (도메인별 분리)
-│   │   ├── auth.ts              # 인증 관련
-│   │   ├── user.ts              # 사용자 정보
-│   │   ├── stock.ts             # 주식/시장 데이터
-│   │   ├── game.ts              # 게임/아이템/랭킹
-│   │   └── index.ts             # Axios 인스턴스 설정
-│   ├── saju-calculator.ts       # 사주 계산 로직
-│   └── socket-client.ts         # WebSocket 클라이언트 설정
+│   │   ├── auth.ts              # 인증/로그인/회원가입/OAuth 토큰 교환
+│   │   ├── user.ts              # 프로필/지갑/온보딩/관심종목
+│   │   ├── stock.ts             # 지수/뉴스/Movers/검색/호가/캔들
+│   │   ├── trade.ts             # 주문/포트폴리오/내역/예수금
+│   │   ├── game.ts              # 상점/가챠/인벤토리/장착/랭킹
+│   │   ├── calc.ts              # 계산기(백엔드 연동용 Placeholder)
+│   │   └── index.ts             # Axios 인스턴스 + 캐시 헤더/401 처리
+│   ├── api.ts                   # API base re-export
+│   ├── cache.ts                 # 프론트 캐시 유틸
+│   ├── types.ts                 # 공용 타입
+│   ├── utils.ts                 # 헬퍼
+│   └── socket-client.ts         # STOMP 클라이언트(`/ws-stomp`)
 └── stores/                      # Zustand 전역 상태
-    ├── auth-store.ts            # 인증/토큰 상태
-    ├── user-store.ts            # 사용자 정보/지갑/포트폴리오
-    ├── stock-store.ts           # 실시간 주가/관심종목
+    ├── auth-store.ts            # 인증/토큰/로그인 흐름
+    ├── user-store.ts            # 프로필/인벤토리/지갑/랭킹 참여 토글
+    ├── portfolio-store.ts       # 포트폴리오/주문/내역
+    ├── stock-store.ts           # 지수/뉴스/Movers/호가/검색/차트 + 캐시 메타
+    ├── chat-store.ts            # AI/채팅 상태
     └── ui-store.ts              # UI 제어 (모달, 사이드바)
 ```
 
@@ -200,7 +214,7 @@ src/
 
 1.  **라우트 정합성**: 문서에 있는 라우트는 코드에 반드시 존재해야 함. (예: `/signup`, `/oauth/callback`, `/calculator`)
 2.  **중복 제거**: `src/store/` vs `src/stores/`는 **하나로 단일화**하고 import 경로를 통일.
-3.  **네이밍 일관성**: Market 컴포넌트는 **현 상태 `components/news/`**를 기준으로 유지하되, 최종적으로 `components/market/`로 정리.
+3.  **네이밍 일관성**: Market 컴포넌트는 이미 `components/market/`로 정리되어 있으므로 이 구조를 단일 진실로 유지.
 4.  **연동 단일 진실**: 인증 토큰/세션의 진실 소스를 하나로 고정(권장: 백엔드 JWT 기반)하여 axios/WS/SSE와 일관되게 연결.
 
 ---
@@ -209,25 +223,25 @@ src/
 
 각 페이지는 백엔드 API와 1:1로 매핑되며, 데이터 로딩 및 상태 동기화가 필수적입니다.
 
-### 5.0 프론트 실제 구현 현황 스냅샷 (2026-01-19)
+### 5.0 프론트 실제 구현 현황 스냅샷 (2026-01-20)
 
-- **공통**: 실데이터 연동 없음. 모든 페이지가 모의데이터/로컬 Zustand 상태 기반으로 동작하며 Axios/STOMP/SSE 미연결. 디자인 시안은 `design/*.png`에 저장(다크/라이트 포함).
+- **공통**: 모든 주요 페이지/스토어가 REST API와 직접 연동됨. Axios 인스턴스는 `Authorization` 헤더/401 Refresh 재시도/`X-Cache-Status|X-Cache-Age|X-Data-Freshness` 메타를 주입. STOMP 클라이언트는 `/ws-stomp`에 연결하며 `/topic/stock.indices`, `/user/queue/trade` 구독 헬퍼를 제공. SSE는 미도입, AI는 별도 FastAPI(8000) HTTP 호출.
 - **라우트 존재/리다이렉트**: `/`, `/market`, `/trade`, `/portfolio`, `/shop`, `/ranking`, `/oracle`, `/mypage`, `/login`, `/signup`, `/oauth/callback`, `/onboarding`, `/calculator`, `/gacha`(→ `/shop` 리다이렉트).
-- **대시보드 `/`**: 위젯 컴포넌트만 렌더, 데이터는 모두 모의/스토어 내부 더미.
-- **시장 `/market`**: 지수·뉴스·랭킹·거래량 모두 하드코딩 리스트. ETF 지수(SPY/QQQ/DIA) API 연동 없음.
-- **거래 `/trade`**: 워치리스트·호가·체결·차트 모두 모의값. WebSocket/STOMP 미사용, 주문 패널 `OrderPanel`도 실거래 API 미연결.
-- **포트폴리오 `/portfolio`**: 보유/히스토리/차트가 로컬 `portfolio-store` 기반이며 가격은 `stock-store` 모의값+Fallback. `/trade/portfolio`, `/trade/history` API 미연동.
-- **상점/가챠 `/shop` (+ `/gacha`)**: 코인 잔액, 아이템 목록, 확률 모두 클라이언트 상태/상수. `game` API(`items/gacha/inventory/equip`)와 미연결.
-- **랭킹 `/ranking`**: Top3/이벤트/업적/내 랭킹 모두 하드코딩. `ranking` API 및 실시간 반영 없음. 공개/랭킹참여 토글은 `user-store` 로컬 상태만 변경.
-- **마이페이지 `/mypage`**: 프로필/인벤토리/공개/랭킹 토글이 전부 `user-store` 모의데이터로만 동작. 프로필 이미지 업로드 없음, `user/me`, `game/inventory`, `game/equip`, `user/me` 업데이트 API 미연결.
-- **AI 도사 `/oracle`**: 채팅·사주/별자리 카드 모두 모의 응답. SSE(`chat/ask`) 미연결, 스트리밍 파싱 미구현.
-- **온보딩 `/onboarding`**: 닉네임·생년월일·시간·투자성향만 수집해 로컬 `calculateSaju` 호출. 스펙 요구(`gender`, `calendarType`, `birthTime` 기본값 00:00:00) 미충족, `POST /api/v1/user/onboarding` 미연동.
-- **계산기 `/calculator`**: 단순 준비중 문구만 표시.
+- **대시보드 `/`**: 위젯은 로컬 상태 기반 UI지만 `useWebSocket` 훅으로 지수/거래 알림 구독 가능(페이지에서 훅 호출 시 실데이터 수신). `stock-store`가 실시간 가격/지수 업데이트를 저장.
+- **시장 `/market`**: `stockApi.getIndices/news/movers`로 실데이터 호출, `stock-store` 캐시 메타(`isUsingCache`, `backendCache`)에 반영. ETF 지수는 SPY/QQQ/DIA 기준.
+- **거래 `/trade`**: 검색/시세/차트/호가 모두 백엔드 API(`stock/search|quote|candles|orderbook`)와 연동. 주문은 `tradeApi.placeOrder`, 예수금/포트폴리오/내역은 각각 전용 API 호출. `/user/queue/trade` STOMP 구독 시 체결 알림 후 포트폴리오 재조회.
+- **포트폴리오 `/portfolio`**: `portfolio-store`가 `tradeApi.getPortfolio/getHistory/getAvailableBalance`를 호출해 데이터 싱크. 주문 성공 시 병렬 재조회 수행.
+- **상점/가챠 `/shop`(+`/gacha`)**: `gameApi.getItems/gacha/getInventory/equip`로 실데이터 연동. 카테고리 ENUM(`NAMEPLATE|AVATAR|THEME`)을 그대로 사용.
+- **랭킹 `/ranking`**: `gameApi.getRanking` 호출로 Top 리스트/내 랭킹 로딩. `user-store`의 `isRankingJoined` 상태와 연계.
+- **마이페이지 `/mypage`**: 프로필/인벤토리/지갑/랭킹 참여 토글 모두 `userApi`/`gameApi` 실 호출로 동작. 공개/랭킹참여 토글은 `userApi.updateProfile`을 통해 서버 반영.
+- **AI 도사 `/oracle`**: `lib/api/ai.ts`가 FastAPI(`http://localhost:8000`)에 POST 호출하여 응답을 받음. SSE 스트리밍은 아직 미구현.
+- **온보딩 `/onboarding`**: UI가 `nickname/birthDate/birthTime/gender/calendarType` 필드 모두 입력 받고 `userApi.submitOnboarding`(POST `/api/v1/user/onboarding`)을 호출. 응답의 `saju` 필드 기반 결과 표시(없으면 기본값). 마이페이지에서 동일 DTO를 사용해 재온보딩(사주 재계산)도 수행한다.
+- **계산기 `/calculator`**: 배당/세금 계산 폼을 표시하고, 사용자가 입력한 배당 수익률/주당 배당액/세율을 `calcApi.getDividend/getTax`를 통해 백엔드 Calc API와 연동한다. Currency는 현재 `null`로 내려오며, 화면에서는 USD 기준 값으로만 표시한다.
 - **인증**:
-  - `/login`: 이메일 로그인 폼이 `auth-store.login`을 호출하지만 백엔드 응답 스키마 검증/에러 처리 최소. Kakao 버튼은 백엔드 리다이렉트만 수행, Refresh/401 재시도 미구현.
-  - `/signup`: UI만 존재, API 연동 미구현(알림만 표시).
-  - `/oauth/callback`: `accessToken` 쿼리만 저장 후 `checkAuth` 호출. `refreshToken` 미처리, 오류 시 Fallback/리다이렉트 없음.
-- **상태관리(Zustand)**: `auth-store`, `user-store`, `portfolio-store`, `stock-store` 모두 로컬 모의 상태이며 서버 동기화 로직 없음. `ui-store`는 존재하지만 경로 단일화 검증 필요.
+  - `/login`: 이메일 로그인은 `authApi.login` 호출 후 토큰 저장·`checkAuth` 실행. Kakao/Google은 SDK 기반 Frontend-Driven + Redirect Fallback 모두 지원. Refresh는 Axios 인터셉터(`/api/v1/auth/refresh`)로 재시도.
+  - `/signup`: `authApi.signup` 연동, 폼 검증 후 성공 시 `/login`으로 안내.
+  - `/oauth/callback`: `accessToken/refreshToken/isNewUser`를 쿼리에서 저장 후 `checkAuth` 수행, 신규면 `/onboarding`으로 이동, 실패 시 토큰 정리 후 `/login` 리다이렉트.
+- **상태관리(Zustand)**: `auth/user/portfolio/stock/chat/ui` 스토어 모두 API 연동 코드 포함. `stock-store`는 프론트/백엔드 캐시 상태를 저장하며, `portfolio-store`는 주문 이후 재조회 로직을 내장.
 
 ### 5.1 인증 및 온보딩 (Hybrid Support)
 
@@ -239,6 +253,7 @@ src/
   - **Email Login**: `POST /api/v1/auth/login` (일반 로그인)
 - **회원가입 (`/signup`)**: 이메일, 비밀번호, 닉네임 입력.
   - API: `POST /api/v1/auth/signup`
+  - 회원가입 성공 시에는 기존처럼 단순히 `/login`으로 보내지 않고, **동일 자격증명으로 `POST /api/v1/auth/login`을 한 번 더 호출해 토큰을 저장·`checkAuth()`를 수행한 뒤, 온보딩 미완료 상태이면 `/onboarding`으로 바로 이동**하는 것이 목표 플로우이다.
 - **OAuth 콜백 (`/oauth/callback`)**: URL 쿼리 파라미터(`accessToken`, `refreshToken`) 파싱 및 저장.
 - **온보딩 (`/onboarding`)**: 정밀 사주 계산을 위한 정보 입력 → 사주(오행) 계산 및 프로필 생성.
   - API: `POST /api/v1/user/onboarding`
@@ -247,6 +262,25 @@ src/
     - `birthTime` (선택): 생년월일시 (HH:mm, 예: "13:05", 모르면 null → 서버에서 00:00:00으로 설정)
     - `gender` (필수): 성별 (MALE/FEMALE/OTHER)
     - `calendarType` (필수): 양력/음력 구분 (SOLAR/LUNAR/LUNAR_LEAP)
+  - **최초 로그인 라우팅 규칙**:
+    - `AuthResponse.isNewUser == true` → `/onboarding`으로 즉시 리다이렉트(구글/카카오 공통).
+    - Kakao: 동의 항목은 `profile_nickname`만 필수로 요청, 이메일은 백엔드가 임의(`kakao-{timestamp}-{random}@auth.madcamp02.local`) 생성하므로 SDK에서 이메일 스코프를 요청하지 않는다.
+
+#### 5.1.1 온보딩 완료 판단 및 라우팅 규칙
+
+- **온보딩 완료 유틸 `hasCompletedOnboarding(user)`**
+  - 프론트에서는 `/api/v1/auth/me` 또는 `/api/v1/user/me`에서 내려오는 `User` 타입을 기준으로, 다음과 같이 온보딩 완료 여부를 계산하는 유틸을 사용한다.
+  - 구현 예시: `hasCompletedOnboarding(user) = !!user?.birthDate && !!user?.sajuElement;`
+- **라우팅 규칙(일반/소셜 공통)**
+  - 일반 회원가입:
+    - `/signup` → `authApi.signup` 성공 → 동일 자격증명으로 `authApi.login` → `checkAuth()` 수행 후, `!hasCompletedOnboarding(user)`이면 `/onboarding`, 그렇지 않으면 `/`로 이동.
+  - 소셜 로그인(`loginWithKakao`, `loginWithGoogle`, `/oauth/callback`):
+    - 백엔드 응답의 `isNewUser` 플래그와 `/me` 기반 `hasCompletedOnboarding(user)`를 함께 사용해 `const needOnboarding = isNewUser === true || !hasCompletedOnboarding(user);`로 판단한다.
+    - `needOnboarding`이 true이면 `/onboarding`, false이면 `/`로 라우팅한다.
+  - (main) 레이아웃 상단의 `AuthGuard`는 인증이 되어 있고 `hasCompletedOnboarding(user) === false`이며 현재 경로가 `/onboarding`이 아닌 경우 항상 `/onboarding`으로 `router.replace`하여, 온보딩 완료 전에는 대시보드/거래/마이페이지 등 메인 기능에 진입할 수 없도록 보호한다.
+- **Investment Style 필드의 역할**
+  - 온보딩 두 번째 스텝의 Investment Style(투자 성향) 선택 값은 **프론트엔드 UX 전용 필드**이며, `/api/v1/user/onboarding` 요청 Body에는 포함되지 않는다.
+  - 백엔드 온보딩 API는 `nickname/birthDate/birthTime/gender/calendarType`만 사용해 사주를 계산하고 `users` 테이블을 갱신하며, Investment Style은 온보딩 결과 카드의 추천 문구나 향후 AI 프롬프트에 활용하는 용도로만 사용한다.
 
 ### 5.2 대시보드 (`/`)
 
@@ -425,12 +459,50 @@ interface TradeHistoryResponse {
   - API: `PUT /api/v1/user/me`
 - **인벤토리**: 획득한 아이템 조회 및 장착/해제.
   - API: `GET /api/v1/game/inventory`, `PUT /api/v1/game/equip/{itemId}`
+- **사주 정보 수정 및 재계산(재온보딩)**:
+  - UI:
+    - 입력 필드: `birthDate`(생년월일), `birthTime`(생시, 선택), `gender`(MALE/FEMALE/OTHER), `calendarType`(SOLAR/LUNAR/LUNAR_LEAP), `nickname`.
+    - 현재 사주 요약: `sajuElement`(오행), `zodiacSign`(띠)를 읽기 전용으로 표시하고, **재계산 시 값이 변경될 수 있음을 안내하는 텍스트**를 함께 보여준다.
+    - 사주 섹션 상단 안내문 예시:  
+      > "사주 정보(생년월일/시간/성별/달력)는 AI 조언과 캐릭터 컨셉에 영향을 주며, 변경 시 전체 경험이 달라질 수 있습니다. 신중하게 수정해주세요."
+  - 동작 플로우:
+    1. 마이페이지 진입 시 `user-store.fetchProfile()`로 `User` 타입의 `birthDate/birthTime/gender/calendarType/sajuElement/zodiacSign`을 로컬 상태에 동기화한다.
+    2. 사용자가 필드를 수정한 뒤 **사주 다시 계산하기** 버튼을 클릭하면, 필수값(`birthDate`, `gender`, `calendarType`, `nickname`)을 검증한다.
+    3. 검증을 통과하면 `window.confirm("정말로 사주를 다시 계산하시겠습니까?")` 모달로 재확인을 받고, 확인 시 `userApi.submitOnboarding({ nickname, birthDate, birthTime, gender, calendarType })`를 호출한다.
+    4. 호출이 성공하면 `auth-store.checkAuth()` 또는 `user-store.fetchProfile()`을 호출해 `/api/v1/user/me` 기반 전역 상태(`auth-store.user` 및 `user-store.profile/wallet/items`)를 다시 로딩한다.
+    5. 성공 시 "사주 정보가 다시 계산되었습니다" 토스트/알림을 표시하고, 에러 시 온보딩 페이지와 동일 패턴으로 오류 메시지를 표기한다.
+  - API: `POST /api/v1/user/onboarding` (온보딩/재온보딩 공통 DTO 사용, idempotent 재계산)
 
 ### 5.8 AI 도사 (`/oracle`) 🆕
 
 - **채팅 UI**: 사용자와 AI 간 대화창.
 - **스트리밍 답변**: SSE를 통해 실시간으로 답변 생성되는 과정 표시.
   - API: `POST /api/v1/chat/ask` (백엔드 프록시, SSE 스트리밍)
+
+### 5.9 계산기 (`/calculator`) 🆕
+
+- **상태**: 라우트/레이아웃 및 백엔드 Calc API는 존재하며, 1차 버전 배당/세금 계산 로직이 구현된 상태 (다통화는 미구현).
+- **목표**: 기본적인 배당/세금 계산기를 제공하되, 복잡한 세법 구현보다는 UX/학습용 계산에 집중. 향후 환율/다통화 지원까지 확장.
+- **현재 연동(1차 버전)**:
+  - 백엔드 Calc API:
+    - `GET /api/v1/calc/dividend?assumedDividendYield&dividendPerShare&taxRate`
+      - `assumedDividendYield`: 배당 수익률(0.03 = 3%), 지갑 총자산 기준 `totalDividend` 계산.
+      - `dividendPerShare`: 주당 배당액 (현재 버전에서는 사용하지 않지만, UI 입력 필드로는 확보).
+      - `taxRate`: 배당소득세 세율.
+    - `GET /api/v1/calc/tax?taxRate`
+      - `taxRate`: 양도소득세 세율.
+  - 응답 DTO:
+    - `CalcDividendResponse { totalDividend, withholdingTax, netDividend, currency(null) }`
+    - `CalcTaxResponse { realizedProfit, taxBase, estimatedTax, currency(null) }`
+  - Frontend 사용 예:
+    - `calcApi.getDividend({ assumedDividendYield, dividendPerShare, taxRate })`
+    - `calcApi.getTax({ taxRate })`
+- **환율/다통화 확장 계획(요약)**:
+  - 백엔드에서 `exchange_rates` 테이블과 `/api/v1/exchange-rates`, `/api/v1/exchange-rates/latest` API를 통해 환율을 제공.
+  - 추후 Calc API에 `currency` 쿼리 파라미터를 추가(`USD`, `KRW`, `EUR` 등)하고,
+    - USD 기준 계산 결과를 환율 테이블 기준으로 변환해 응답(`currency`, `fxAsOf`, `fxRateUsed`)을 채우는 것을 목표로 한다.
+  - 프론트 `/calculator` 페이지에는 통화 선택 드롭다운을 추가하고,
+    - 선택된 통화와 환율(`exchange-rates` API 응답)을 기반으로 금액 표시 포맷과 기준일(`fxAsOf`)을 함께 노출하는 UX를 설계한다.
 
 ---
 
@@ -509,13 +581,49 @@ Zustand를 사용하여 전역 상태를 효율적으로 관리하고 컴포넌�
 
 ### 🟡 Phase 2: 기능 연동 (예정)
 
+#### Phase 2.1: 백엔드 Redis 캐싱 연계 (Phase 3.6) 🆕
+
+**목표**: 백엔드 Redis 캐싱과 프론트엔드 localStorage 캐싱의 이중 보호 전략 완성
+
+**구현 항목**:
+- [x] **응답 헤더 처리**: `X-Cache-Status`, `X-Cache-Age`, `X-Data-Freshness` 헤더 파싱 ✅
+  - `HIT`: 백엔드 Redis 캐시에서 조회됨 (빠른 응답)
+  - `MISS`: 외부 API 호출됨 (정상 응답)
+  - `STALE`: 만료된 데이터지만 사용 가능 (백엔드 Stale 캐시 사용)
+- [x] **캐시 상태 UI 표시**: ✅
+  - `STALE` 상태일 때 "캐시된 데이터" 알림 표시 (파란색 배지)
+  - `HIT` 상태일 때는 조용히 표시 (사용자에게 불필요한 정보)
+- [x] **Axios Interceptor 개선**: ✅
+  - 응답 헤더를 확인하여 캐시 상태를 `stock-store`에 저장
+  - `X-Cache-Status: STALE`일 때는 에러로 처리하지 않음
+- [x] **캐시 동기화**: ✅
+  - 백엔드에서 최신 데이터를 받으면 프론트엔드 localStorage 캐시도 업데이트
+  - 백엔드 Stale 데이터를 받아도 프론트엔드 캐시는 유지 (다음 API 호출 시 사용)
+
+**구현 완료**: 2026-01-19  
+**검증 문서**: `docs/PHASE_2.1_IMPLEMENTATION_VERIFICATION.md`
+
+**예상 효과**:
+- 백엔드 Redis 캐시 Hit 시: 네트워크 지연 최소화
+- 백엔드 API 실패 시: Stale 데이터로 서비스 지속성 보장
+- 프론트엔드 localStorage: 백엔드도 실패할 경우 최후의 방어선
+
+### 🟡 Phase 2: 기능 연동 (예정)
+
 - [ ] 페이지별 실데이터 치환(현 Mock → API)
   - `/market`: indices/news/movers
-  - `/trade`: search/candles/orderbook + 주문
+  - `/trade`: search/candles/orderbook + 주문 + **watchlist 조회/추가/삭제**
   - `/portfolio`: portfolio/history
   - `/shop`: items/gacha/inventory/equip (백엔드 Phase 5 완료, 실제 연동 가능)
   - `/ranking`: ranking (백엔드 Phase 5 완료, 실제 연동 가능)
   - `/mypage`: user/me 업데이트 + 공개/랭킹참여 토글
+- [ ] **Watchlist API 연동**
+  - `GET /api/v1/user/watchlist`: 관심종목 조회
+  - `POST /api/v1/user/watchlist`: 관심종목 추가
+  - `DELETE /api/v1/user/watchlist/{ticker}`: 관심종목 삭제
+  - `stock-store.ts`에 `watchlist: string[]` 상태 및 `loadWatchlist()`, `addToWatchlist()`, `removeFromWatchlist()` 액션 추가
+  - `/trade` 페이지 왼쪽 사이드바에 관심종목 리스트 표시
+  - `/market` 페이지에 "내 관심종목" 섹션 추가
 - [ ] 스토어(`stores/*`)를 API 응답 타입에 맞게 재정의 및 전역 동기화
 
 ### 🟢 Phase 3: 실시간 & 최적화 (예정)
@@ -523,6 +631,16 @@ Zustand를 사용하여 전역 상태를 효율적으로 관리하고 컴포넌�
 - [ ] WebSocket(STOMP) 연결 및 실시간 주가/체결 반영 (문서 토픽 기준)
   - Endpoint/Topic 정합성: `/ws-stomp`, `/topic/*`, `/user/queue/*`
   - 동적 구독 관리: 페이지 진입 시 구독, 이탈 시 해제 (백엔드 LRU 전략과 협력)
+- [ ] **`/topic/stock.indices` 구독 및 실시간 업데이트**
+  - `/market` 페이지 진입 시 구독, 이탈 시 해제
+  - 초기 로딩: REST `GET /api/v1/market/indices` 호출하여 즉시 표시
+  - 실시간 업데이트: STOMP 메시지 수신 시 카드/차트 업데이트
+  - `stock-store.ts`에 `indices: MarketIndicesItem[]` 상태 및 `updateIndices(data)` 액션 추가
+- [ ] **`/user/queue/trade` 구독 및 체결 알림 처리**
+  - 로그인 완료 시 전역 구독, 로그아웃 시 해제
+  - `ui-store` 또는 `user-store`에 알림 리스트 추가
+  - 토스트 메시지 표시: "AAPL 매수 체결 완료 (10주 @ $195.12)"
+  - `/trade` 페이지에 "실시간 체결 로그" 영역 추가 (최근 10개 표시)
 - [ ] Historical Data (캔들) API 에러 처리 구현
   - `429 QUOTA_EXCEEDED` 에러 시 사용자 안내 메시지 표시
   - `X-Data-Status: Stale` 또는 `warning` 필드 감지 시 UI에 "최신 데이터 아님" 표시
@@ -539,11 +657,11 @@ Zustand를 사용하여 전역 상태를 효율적으로 관리하고 컴포넌�
 - [ ] **데이터 완성도 표시**: 여러 Provider에서 병합된 데이터의 경우, 데이터 완성도(커버리지)를 시각적으로 표시
 - [ ] **Fallback 상태 안내**: Primary Provider 실패 시 Secondary Provider로 전환된 경우, 사용자에게 안내 메시지 표시
 
-**참고**: Phase 4는 백엔드의 Phase 9(외부 API 확장 전략) 구현 후에만 필요한 작업입니다.
+**참고**: Phase 4는 백엔드의 Phase 8(외부 API 확장 전략) 구현 후에만 필요한 작업입니다.
 
 ### 🔵 Phase 5: 관리자 기능 (향후 개선)
 
-백엔드의 Phase 10(Market Movers 관리 기능) 구현 시, 관리자 페이지에서 종목 리스트를 관리할 수 있습니다.
+백엔드의 Phase 9(Market Movers 관리 기능) 구현 시, 관리자 페이지에서 종목 리스트를 관리할 수 있습니다.
 
 - [ ] **관리자 페이지 (선택)**: Market Movers 종목 리스트 관리 UI
   - 종목 추가/수정/삭제 기능
@@ -605,8 +723,8 @@ flowchart TD
 
 ---
 
-**문서 버전:** 2.7.11 (Phase 5 완료 + Phase 5.5 프론트 연동·DB 제약 보강 체크리스트 반영)  
-**최종 수정일:** 2026-01-19
+**문서 버전:** 2.7.20 (온보딩/마이페이지 사주 재계산 플로우 + `/auth/me` 응답 매핑 및 hasCompletedOnboarding·AuthGuard 라우팅 정합성 반영)  
+**최종 수정일:** 2026-01-21
 
 ### 수정 요약 (2026-01-19)
 

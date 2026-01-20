@@ -72,15 +72,20 @@ public class StockController {
     //------------------------------------------
     // 캔들 차트 데이터 조회
     //------------------------------------------
-    // 요청: GET /api/v1/stock/candles/{ticker}?resolution={D}&from={timestamp}&to={timestamp}
+    // 요청: GET /api/v1/stock/candles/{ticker}?resolution={d|w|m}&from={ISO-8601}&to={ISO-8601}
     // 인증: 불필요 (Public API)
+    // 파라미터:
+    //   - ticker (path): 종목 심볼
+    //   - resolution (query): period (d=daily, w=weekly, m=monthly)
+    //   - from (query): 시작 시간 (ISO-8601 형식)
+    //   - to (query): 종료 시간 (ISO-8601 형식)
     //------------------------------------------
-    @Operation(summary = "캔들 차트 데이터 조회", description = "특정 종목의 캔들 차트 데이터 조회")
+    @Operation(summary = "캔들 차트 데이터 조회", description = "특정 종목의 캔들 차트 데이터 조회 (EODHD API 사용)")
     @GetMapping("/candles/{ticker}")
     public ResponseEntity<StockCandlesResponse> getCandles(
             @Parameter(description = "종목 심볼", required = true)
             @PathVariable String ticker,
-            @Parameter(description = "시간 간격 (1, 5, 15, 30, 60, D, W, M)", required = true)
+            @Parameter(description = "시간 간격: d (daily), w (weekly), m (monthly)", required = true)
             @RequestParam String resolution,
             @Parameter(description = "시작 시간 (ISO-8601)", required = true)
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,

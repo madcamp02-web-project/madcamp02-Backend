@@ -186,6 +186,8 @@ public class FinnhubTradesWebSocketClient {
 
     /**
      * 메시지 처리
+     * 
+     * 성능 최적화: 불필요한 로깅 제거 및 빠른 파싱
      */
     private void handleMessage(String text) {
         try {
@@ -193,36 +195,35 @@ public class FinnhubTradesWebSocketClient {
             String type = root.path("type").asText();
             
             if (!"trade".equals(type)) {
-                log.debug("알 수 없는 메시지 타입: {}", type);
                 return;
             }
 
             JsonNode dataArray = root.path("data");
             if (!dataArray.isArray() || dataArray.size() == 0) {
-                log.debug("빈 data 배열 또는 data 필드 없음");
                 return;
             }
 
             // data 배열의 각 trade 처리
             for (JsonNode trade : dataArray) {
                 String symbol = trade.path("s").asText();
+                
+                // 심볼이 없으면 즉시 건너뛰기 (로깅 없이)
+                if (symbol == null || symbol.isEmpty()) {
+                    continue;
+                }
+
                 double price = trade.path("p").asDouble(0.0);
                 long timestamp = trade.path("t").asLong(0);
                 double volume = trade.path("v").asDouble(0.0);
                 
-                // conditions 배열 파싱
+                // conditions 배열 파싱 (조건부)
                 JsonNode conditionsNode = trade.path("c");
                 String[] conditions = null;
-                if (conditionsNode.isArray()) {
+                if (conditionsNode.isArray() && conditionsNode.size() > 0) {
                     conditions = new String[conditionsNode.size()];
                     for (int i = 0; i < conditionsNode.size(); i++) {
                         conditions[i] = conditionsNode.get(i).asText();
                     }
-                }
-
-                if (symbol == null || symbol.isEmpty()) {
-                    log.debug("심볼이 없는 trade 메시지 무시");
-                    continue;
                 }
 
                 // 브로드캐스트 서비스에 전달 (우선)
@@ -256,7 +257,6 @@ public class FinnhubTradesWebSocketClient {
         } else {
             // 연결 전이거나 재연결 중이면 pending에 추가
             pendingSubscriptions.add(symbol);
-            log.debug("연결되지 않아 구독 요청을 pending에 추가: {}", symbol);
         }
     }
 
@@ -284,7 +284,6 @@ public class FinnhubTradesWebSocketClient {
             String message = String.format("{\"type\":\"subscribe\",\"symbol\":\"%s\"}", symbol);
             if (webSocket != null) {
                 webSocket.send(message);
-                log.debug("Finnhub 구독 메시지 전송: {}", symbol);
             }
         } catch (Exception e) {
             log.error("구독 메시지 전송 실패: {}", symbol, e);
@@ -299,7 +298,6 @@ public class FinnhubTradesWebSocketClient {
             String message = String.format("{\"type\":\"unsubscribe\",\"symbol\":\"%s\"}", symbol);
             if (webSocket != null) {
                 webSocket.send(message);
-                log.debug("Finnhub 구독 해제 메시지 전송: {}", symbol);
             }
         } catch (Exception e) {
             log.error("구독 해제 메시지 전송 실패: {}", symbol, e);
