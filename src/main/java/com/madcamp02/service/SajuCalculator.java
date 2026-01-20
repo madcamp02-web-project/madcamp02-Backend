@@ -172,22 +172,29 @@ public class SajuCalculator {
     // 양력 변환 (음력 -> 양력)
     //------------------------------------------
     // 한국천문연구원 API를 사용하여 음력을 양력으로 변환
+    // - 외부 API 오류가 발생할 경우 IllegalStateException으로 래핑하여 상위에서 처리
     //------------------------------------------
     private LocalDate convertToSolar(LocalDate inputDate, String calendarType) {
         if ("SOLAR".equals(calendarType)) {
             return inputDate; // 이미 양력
         }
 
-        // 음력/음력윤달의 경우 한국천문연구원 API 호출
-        boolean isLeapMonth = "LUNAR_LEAP".equals(calendarType);
-        LunarCalendarClient.SolarDateResult result = lunarCalendarClient.convertLunarToSolar(
-                inputDate.getYear(),
-                inputDate.getMonthValue(),
-                inputDate.getDayOfMonth(),
-                isLeapMonth
-        );
+        try {
+            // 음력/음력윤달의 경우 한국천문연구원 API 호출
+            boolean isLeapMonth = "LUNAR_LEAP".equals(calendarType);
+            LunarCalendarClient.SolarDateResult result = lunarCalendarClient.convertLunarToSolar(
+                    inputDate.getYear(),
+                    inputDate.getMonthValue(),
+                    inputDate.getDayOfMonth(),
+                    isLeapMonth
+            );
 
-        return result.getSolarDate();
+            return result.getSolarDate();
+        } catch (Exception e) {
+            // 상위(Service)에서 온보딩 전용 에러 코드(ONBOARDING_002)로 매핑할 수 있도록 래핑
+            log.error("음력→양력 변환 실패 - inputDate={}, calendarType={}", inputDate, calendarType, e);
+            throw new IllegalStateException("LUNAR_CONVERT_FAILED", e);
+        }
     }
 
     //------------------------------------------

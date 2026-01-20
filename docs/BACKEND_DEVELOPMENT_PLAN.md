@@ -34,6 +34,7 @@
 | **2.7.15** | **2026-01-19** | **Phase 3.6: 백엔드 Redis 캐싱 확장 (Market Indices/News/Movers) 및 프론트엔드 이중 캐싱 전략 수립** | **MadCamp02** |
 | **2.7.16** | **2026-01-19** | **Phase 3.4: Candles API 날짜 범위 필터링 구현 완료 내용 문서화 (period 필드, 배치 로드 전략, Quota 관리 상세 명세 추가)** | **MadCamp02** |
 | **2.7.17** | **2026-01-20** | **Kakao 동의 스코프를 `profile_nickname` 단일로 축소, 이메일 미요청 시 백엔드가 임의 이메일(`kakao-{timestamp}-{random}@auth.madcamp02.local`)을 생성·중복 검사 후 가입하도록 프로비저닝 로직 보강(하이브리드 OAuth 공통)** | **MadCamp02** |
+| **2.7.18** | **2026-01-20** | **`POST /api/v1/user/onboarding`가 최초 온보딩과 마이페이지 사주 정보 수정 시 재계산(재온보딩)을 모두 처리하는 idempotent 엔드포인트임을 명시하고, 재온보딩 시 `users.*` 사주 관련 컬럼을 안전하게 덮어쓰도록 정책을 고정. 온보딩 완료 여부는 별도 플래그 없이 `users.birth_date + users.saju_element` 조합으로 해석함을 명시.** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -458,8 +459,13 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
 - **엔드포인트**:
   - `GET /api/v1/user/me` (`UserMeResponse`, email 포함)
   - `PUT /api/v1/user/me` (nickname, is_public, is_ranking_joined 등)
-  - `POST /api/v1/user/onboarding` (정밀 사주 계산: 성별/양력음력/시간 포함)
+  - `POST /api/v1/user/onboarding` (정밀 사주 계산: 성별/양력음력/시간 포함).  
+    → 이 엔드포인트는 **최초 온보딩과 마이페이지에서의 사주 정보 재계산(재온보딩)**을 모두 처리하는 **단일 idempotent 진입점**으로 사용된다. 동일 사용자에 대해 반복 호출 시 `users.birth_date/birth_time/gender/calendar_type/saju_element/zodiac_sign` 컬럼을 새 입력값 기준으로 항상 덮어쓴다.
   - `GET /api/v1/user/wallet`
+- **온보딩 완료 해석 규칙 및 소셜 플래그 역할**
+  - 온보딩 완료 여부는 별도의 boolean 컬럼 없이, `users.birth_date IS NOT NULL` 이고 `users.saju_element IS NOT NULL`인 경우로 해석한다.
+  - 프론트엔드는 `/api/v1/auth/me` 또는 `/api/v1/user/me` 응답을 기반으로 동일한 규칙을 사용해 `hasCompletedOnboarding(user)`를 계산하며, 메인 기능 접근 전 온보딩을 강제한다.
+  - 소셜 로그인 응답 DTO의 `isNewUser` 플래그는 **라우팅 힌트**로만 사용되며, 권한/보안 판단은 항상 JWT 및 DB 상태(`birth_date/saju_element`)를 기준으로 한다.
 - **DB 스키마 확장 (Flyway V4)**:
   - `users.birth_time` (TIME): 생년월일시 (기본값 00:00:00)
   - `users.gender` (VARCHAR): 성별 (MALE/FEMALE/OTHER)
@@ -1043,8 +1049,8 @@ sequenceDiagram
 
 ---
 
-**문서 버전:** 2.7.16 (Phase 6: Finnhub WebSocket + Phase 3.6/3.4 캐싱·Candles 범위 필터링 반영)  
-**최종 수정일:** 2026-01-19
+**문서 버전:** 2.7.18 (온보딩/마이페이지 사주 재계산 플로우 및 `/user/onboarding` idempotent 재온보딩·온보딩 완료 해석 규칙 반영)  
+**최종 수정일:** 2026-01-20
 
 ---
 

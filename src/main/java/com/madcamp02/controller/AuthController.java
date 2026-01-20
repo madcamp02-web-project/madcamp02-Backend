@@ -305,9 +305,11 @@ public class AuthController {
         // 프로필 정보(사주/아바타 등)가 들어가 있게 됨
 
         // isNewUser의 의미:
-        // - 프론트가 온보딩 화면을 띄울지 말지 결정하는 플래그
-        // - 일단 지금 Phase 2 개발하고 있는데 "사주 계산이 아직 안 됨(sajuElement == null)"이면 온보딩 미완료로 보게 됨
-        boolean isNewUser = (userDetails.getUser().getSajuElement() == null);
+        // - 프론트가 온보딩 화면을 띄울지 말지 결정할 때,
+        //   hasCompletedOnboarding(user)와 함께 사용하는 힌트 값
+        // - 여기서는 도메인 헬퍼(User.hasCompletedOnboarding)를 통해
+        //   "온보딩 미완료 여부"를 기준으로 설정
+        boolean isNewUser = !userDetails.getUser().hasCompletedOnboarding();
 
         return ResponseEntity.ok(AuthResponse.builder()
                 .userId(userDetails.getUserId())

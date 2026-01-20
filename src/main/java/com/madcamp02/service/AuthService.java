@@ -229,7 +229,10 @@ public class AuthService {
                 .nickname(user.getNickname())
                 .sajuElement(user.getSajuElement())
                 .avatarUrl(user.getAvatarUrl())
-                .isNewUser(isNewUser) // 프론트가 온보딩 화면을 띄울지 말지 결정하는 플래그
+                // isNewUser:
+                // - 소셜/일반 공통으로 "신규 가입 여부"를 나타내는 플래그
+                // - 실제 온보딩 강제 여부는 프론트에서 hasCompletedOnboarding(user)와 함께 판단
+                .isNewUser(isNewUser)
                 .build();
     }
 

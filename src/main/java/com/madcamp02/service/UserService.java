@@ -95,15 +95,36 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserException(ErrorCode.USER_NOT_FOUND));
 
-        // 정밀 사주 계산
-        SajuCalculator.SajuInput input = SajuCalculator.SajuInput.builder()
-                .birthDate(request.getBirthDate())
-                .birthTime(request.getBirthTimeAsLocalTime())
-                .gender(request.getGender())
-                .calendarType(request.getCalendarType())
-                .build();
+        // 닉네임이 함께 넘어온 경우, 온보딩과 동시에 닉네임도 갱신
+        if (request.getNickname() != null && !request.getNickname().isEmpty()) {
+            user.updateNickname(request.getNickname());
+        }
 
-        SajuCalculator.SajuResult result = sajuCalculator.calculatePrecise(input);
+        SajuCalculator.SajuResult result;
+        try {
+            // 정밀 사주 계산 입력값 구성
+            SajuCalculator.SajuInput input = SajuCalculator.SajuInput.builder()
+                    .birthDate(request.getBirthDate())
+                    .birthTime(request.getBirthTimeAsLocalTime())
+                    .gender(request.getGender())
+                    .calendarType(request.getCalendarType())
+                    .build();
+
+            // 정밀 사주 계산 (음력/양력 변환 + 4주 계산)
+            result = sajuCalculator.calculatePrecise(input);
+        } catch (IllegalArgumentException e) {
+            // 입력값 자체가 잘못된 경우 (날짜/시간 형식 등)
+            throw new UserException(ErrorCode.ONBOARDING_INVALID_INPUT);
+        } catch (IllegalStateException e) {
+            // convertToSolar 단계에서 래핑한 예외 식별
+            if ("LUNAR_CONVERT_FAILED".equals(e.getMessage())) {
+                throw new UserException(ErrorCode.ONBOARDING_LUNAR_CONVERT_FAILED);
+            }
+            throw new UserException(ErrorCode.ONBOARDING_SAJU_CALC_FAILED);
+        } catch (Exception e) {
+            // 그 외 예기치 못한 사주 계산 오류
+            throw new UserException(ErrorCode.ONBOARDING_SAJU_CALC_FAILED);
+        }
 
         // 온보딩은 "한 번에" 완료 처리하는게 안전합니다.
         // (중간 저장/중간 실패가 나면, birthDate만 들어가고 saju가 비는 불완전 상태가 될 수 있음)

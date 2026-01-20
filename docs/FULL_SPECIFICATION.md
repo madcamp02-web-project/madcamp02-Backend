@@ -34,6 +34,7 @@
 | **2.7.15** | **2026-01-19** | **5.3.1: Candles API 상세 명세 보강 (Request/Response DTO, 날짜 범위 필터링, period 필드, 배치 로드 전략 상세 설명 추가)** | **MadCamp02** |
 | **2.7.16** | **2026-01-19** | **Candles API 범위 필터링/배치 로드/Quota 처리 최종 고정 + 문서 하단 버전 정합성 수정(Phase 3.4/3.6 반영)** | **MadCamp02** |
 | **2.7.17** | **2026-01-20** | **Kakao OAuth 스코프를 `profile_nickname` 단일로 축소, 이메일 미동의 시 백엔드가 임의 이메일(`kakao-{timestamp}-{random}@auth.madcamp02.local`)을 생성·중복 검사 후 가입하도록 명시. 소셜 신규 로그인은 `isNewUser` 플래그를 통해 `/onboarding` 리다이렉트하도록 가이드(구글/카카오 공통).** | **MadCamp02** |
+| **2.7.18** | **2026-01-20** | **`POST /api/v1/user/onboarding`를 최초 온보딩과 마이페이지 사주 정보 재계산(재온보딩) 양쪽에서 사용하는 idempotent 엔드포인트로 고정하고, 소셜/일반 공통 온보딩 강제 플로우 및 `hasCompletedOnboarding` 판단 기준(`users.birth_date + users.saju_element`)을 명시.** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -486,13 +487,23 @@ _(나머지 테이블 `wallet`, `portfolio`, `trade_logs`, `inventory`, `watchli
 | POST   | `/oauth/kakao`  | **Frontend-Driven** Kakao 로그인 (Body: accessToken) |
 | POST   | `/oauth/google` | **Frontend-Driven** Google 로그인 (Body: idToken)    |
 
+#### 5.1.1 온보딩 필수 플로우 및 완료 기준
+
+- **온보딩 완료 여부 판단 규칙**
+  - 별도의 boolean 컬럼 없이, `users.birth_date IS NOT NULL` 이고 `users.saju_element IS NOT NULL`이면 온보딩이 완료된 것으로 해석한다.
+  - 프론트엔드에서도 `/api/v1/auth/me` 또는 `/api/v1/user/me` 응답의 `birthDate`·`sajuElement`를 기반으로 동일 규칙을 사용해 `hasCompletedOnboarding(user)`를 계산한다.
+- **최초 회원가입/로그인 라우팅 규칙(소셜/일반 공통)**
+  - 일반 회원가입(`/api/v1/auth/signup`) 또는 소셜 로그인(`/api/v1/auth/oauth/*`, `/oauth2/authorization/*`) 직후, 사용자에 대한 온보딩이 완료되지 않았다면(위 조건이 false) **대시보드/거래/상점 등 메인 기능에 진입하기 전에 반드시 `/onboarding`을 거쳐야 한다.**
+  - 소셜 로그인 응답 DTO의 `isNewUser` 플래그는 "이번 로그인에서 계정을 새로 만든 것"을 의미하며, 프론트는 일반적으로 `isNewUser === true || !hasCompletedOnboarding(user)` 인 경우 `/onboarding`으로 라우팅한다.
+  - `/api/v1/user/onboarding` 호출이 성공해 `/api/v1/user/me` 기준 `birth_date`·`saju_element`가 모두 채워지면, 이후에는 메인 기능 접근을 허용한다.
+
 ### 5.2 사용자 API (`/api/v1/user`)
 
 | Method | Endpoint           | 설명                                                            |
 | ------ | ------------------ | --------------------------------------------------------------- |
 | GET    | `/me`              | 내 프로필 상세 조회 (`UserMeResponse`, email 포함)              |
 | PUT    | `/me`              | 프로필/설정 수정 (닉네임, 공개여부 등)                          |
-| POST   | `/onboarding`      | 온보딩 (정밀 사주 계산: 4주 완전 구현, 한국천문연구원 API 연동) |
+| POST   | `/onboarding`      | 온보딩 (정밀 사주 계산: 4주 완전 구현, 한국천문연구원 API 연동). 마이페이지에서 생년월일/시간/성별/달력 타입/닉네임을 수정한 뒤 **사주 다시 계산하기**를 눌렀을 때도 동일 엔드포인트를 호출하여 idempotent하게 사주와 관련 필드를 재계산·저장한다. |
 | GET    | `/wallet`          | 지갑 정보 (예수금, 코인 등)                                     |
 | GET    | `/watchlist`       | 내 관심종목 조회 (`UserWatchlistResponse`)                      |
 | POST   | `/watchlist`       | 관심종목 추가 (Request: `{ ticker: string }`)                   |
@@ -1541,5 +1552,5 @@ CREATE TABLE api_usage_logs (
 
 ---
 
-**문서 버전:** 2.7.16 (Phase 6 + Candles/Redis 캐싱 정합성 반영)  
-**최종 수정일:** 2026-01-19
+**문서 버전:** 2.7.18 (온보딩/마이페이지 사주 재계산 플로우 및 `/user/onboarding` idempotent 재온보딩 정책 반영)  
+**최종 수정일:** 2026-01-20

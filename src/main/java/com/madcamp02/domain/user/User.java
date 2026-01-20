@@ -243,6 +243,19 @@ User user = User.builder()
         this.updatedAt = LocalDateTime.now();
     }
 
+    //------------------------------------------
+    // 온보딩 완료 여부 헬퍼
+    //------------------------------------------
+    // 온보딩이 완료되었다고 간주하는 기준:
+    // - birthDate가 null이 아니고
+    // - sajuElement가 null/빈 문자열이 아님
+    //------------------------------------------
+    public boolean hasCompletedOnboarding() {
+        return this.birthDate != null
+                && this.sajuElement != null
+                && !this.sajuElement.isBlank();
+    }
+
     @PreUpdate
     protected void onUpdate() {
         this.updatedAt = LocalDateTime.now();

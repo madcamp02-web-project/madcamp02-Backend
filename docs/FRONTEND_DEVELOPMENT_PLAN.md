@@ -1,6 +1,6 @@
 # 🎨 MadCamp02: 프론트엔드 개발 계획서
 
-**Ver 2.7.16 - Frontend Development Blueprint (Spec-Driven Alignment)**
+**Ver 2.7.18 - Frontend Development Blueprint (Spec-Driven Alignment)**
 
 ---
 
@@ -27,6 +27,8 @@
 | **2.7.13** | **2026-01-19** | **Phase 3.6: 백엔드 Redis 캐싱 확장 및 프론트엔드 이중 캐싱 전략 수립 (X-Cache-Status 헤더 처리)** | **MadCamp02** |
 | **2.7.15** | **2026-01-20** | **실 구현 현황 최신화: 모든 주요 라우트/스토어가 실제 REST API 및 `/ws-stomp` 클라이언트와 연결됨을 반영, 온보딩 필드·OAuth 콜백·캐시 헤더 처리 정합성 수정** | **MadCamp02** |
 | **2.7.16** | **2026-01-20** | **Kakao 동의 스코프를 `profile_nickname` 단일로 축소하고, 이메일은 백엔드가 임의 생성하도록 가이드. OAuth 콜백에서 `isNewUser`면 `/onboarding`으로 즉시 리다이렉트하도록 최초 로그인 플로우 명시(구글/카카오 공통).** | **MadCamp02** |
+| **2.7.17** | **2026-01-20** | **마이페이지에서 생년월일/시간/성별/달력 타입/닉네임을 수정 후 `POST /api/v1/user/onboarding`을 호출해 사주를 재계산하는 재온보딩 플로우를 명시하고, 온보딩 페이지와 동일 DTO/스토어 동기화 규칙으로 통일.** | **MadCamp02** |
+| **2.7.18** | **2026-01-20** | **일반 회원가입 성공 시 자동 로그인 후 `/onboarding`으로 직행하도록 플로우를 고정하고, `hasCompletedOnboarding(user)`(= `birthDate + sajuElement`) 기반 온보딩 강제/라우팅 규칙 및 Investment Style의 프론트 전용 필드 성격을 문서화.** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -249,6 +251,7 @@ src/
   - **Email Login**: `POST /api/v1/auth/login` (일반 로그인)
 - **회원가입 (`/signup`)**: 이메일, 비밀번호, 닉네임 입력.
   - API: `POST /api/v1/auth/signup`
+  - 회원가입 성공 시에는 기존처럼 단순히 `/login`으로 보내지 않고, **동일 자격증명으로 `POST /api/v1/auth/login`을 한 번 더 호출해 토큰을 저장·`checkAuth()`를 수행한 뒤, 온보딩 미완료 상태이면 `/onboarding`으로 바로 이동**하는 것이 목표 플로우이다.
 - **OAuth 콜백 (`/oauth/callback`)**: URL 쿼리 파라미터(`accessToken`, `refreshToken`) 파싱 및 저장.
 - **온보딩 (`/onboarding`)**: 정밀 사주 계산을 위한 정보 입력 → 사주(오행) 계산 및 프로필 생성.
   - API: `POST /api/v1/user/onboarding`
@@ -260,6 +263,22 @@ src/
   - **최초 로그인 라우팅 규칙**:
     - `AuthResponse.isNewUser == true` → `/onboarding`으로 즉시 리다이렉트(구글/카카오 공통).
     - Kakao: 동의 항목은 `profile_nickname`만 필수로 요청, 이메일은 백엔드가 임의(`kakao-{timestamp}-{random}@auth.madcamp02.local`) 생성하므로 SDK에서 이메일 스코프를 요청하지 않는다.
+
+#### 5.1.1 온보딩 완료 판단 및 라우팅 규칙
+
+- **온보딩 완료 유틸 `hasCompletedOnboarding(user)`**
+  - 프론트에서는 `/api/v1/auth/me` 또는 `/api/v1/user/me`에서 내려오는 `User` 타입을 기준으로, 다음과 같이 온보딩 완료 여부를 계산하는 유틸을 사용한다.
+  - 구현 예시: `hasCompletedOnboarding(user) = !!user?.birthDate && !!user?.sajuElement;`
+- **라우팅 규칙(일반/소셜 공통)**
+  - 일반 회원가입:
+    - `/signup` → `authApi.signup` 성공 → 동일 자격증명으로 `authApi.login` → `checkAuth()` 수행 후, `!hasCompletedOnboarding(user)`이면 `/onboarding`, 그렇지 않으면 `/`로 이동.
+  - 소셜 로그인(`loginWithKakao`, `loginWithGoogle`, `/oauth/callback`):
+    - 백엔드 응답의 `isNewUser` 플래그와 `/me` 기반 `hasCompletedOnboarding(user)`를 함께 사용해 `const needOnboarding = isNewUser === true || !hasCompletedOnboarding(user);`로 판단한다.
+    - `needOnboarding`이 true이면 `/onboarding`, false이면 `/`로 라우팅한다.
+  - (main) 레이아웃 상단의 `AuthGuard`는 인증이 되어 있고 `hasCompletedOnboarding(user) === false`이며 현재 경로가 `/onboarding`이 아닌 경우 항상 `/onboarding`으로 `router.replace`하여, 온보딩 완료 전에는 대시보드/거래/마이페이지 등 메인 기능에 진입할 수 없도록 보호한다.
+- **Investment Style 필드의 역할**
+  - 온보딩 두 번째 스텝의 Investment Style(투자 성향) 선택 값은 **프론트엔드 UX 전용 필드**이며, `/api/v1/user/onboarding` 요청 Body에는 포함되지 않는다.
+  - 백엔드 온보딩 API는 `nickname/birthDate/birthTime/gender/calendarType`만 사용해 사주를 계산하고 `users` 테이블을 갱신하며, Investment Style은 온보딩 결과 카드의 추천 문구나 향후 AI 프롬프트에 활용하는 용도로만 사용한다.
 
 ### 5.2 대시보드 (`/`)
 
@@ -438,6 +457,19 @@ interface TradeHistoryResponse {
   - API: `PUT /api/v1/user/me`
 - **인벤토리**: 획득한 아이템 조회 및 장착/해제.
   - API: `GET /api/v1/game/inventory`, `PUT /api/v1/game/equip/{itemId}`
+- **사주 정보 수정 및 재계산(재온보딩)**:
+  - UI:
+    - 입력 필드: `birthDate`(생년월일), `birthTime`(생시, 선택), `gender`(MALE/FEMALE/OTHER), `calendarType`(SOLAR/LUNAR/LUNAR_LEAP), `nickname`.
+    - 현재 사주 요약: `sajuElement`(오행), `zodiacSign`(띠)를 읽기 전용으로 표시하고, **재계산 시 값이 변경될 수 있음을 안내하는 텍스트**를 함께 보여준다.
+    - 사주 섹션 상단 안내문 예시:  
+      > "사주 정보(생년월일/시간/성별/달력)는 AI 조언과 캐릭터 컨셉에 영향을 주며, 변경 시 전체 경험이 달라질 수 있습니다. 신중하게 수정해주세요."
+  - 동작 플로우:
+    1. 마이페이지 진입 시 `user-store.fetchProfile()`로 `User` 타입의 `birthDate/birthTime/gender/calendarType/sajuElement/zodiacSign`을 로컬 상태에 동기화한다.
+    2. 사용자가 필드를 수정한 뒤 **사주 다시 계산하기** 버튼을 클릭하면, 필수값(`birthDate`, `gender`, `calendarType`, `nickname`)을 검증한다.
+    3. 검증을 통과하면 `window.confirm("정말로 사주를 다시 계산하시겠습니까?")` 모달로 재확인을 받고, 확인 시 `userApi.submitOnboarding({ nickname, birthDate, birthTime, gender, calendarType })`를 호출한다.
+    4. 호출이 성공하면 `auth-store.checkAuth()` 또는 `user-store.fetchProfile()`을 호출해 `/api/v1/user/me` 기반 전역 상태(`auth-store.user` 및 `user-store.profile/wallet/items`)를 다시 로딩한다.
+    5. 성공 시 "사주 정보가 다시 계산되었습니다" 토스트/알림을 표시하고, 에러 시 온보딩 페이지와 동일 패턴으로 오류 메시지를 표기한다.
+  - API: `POST /api/v1/user/onboarding` (온보딩/재온보딩 공통 DTO 사용, idempotent 재계산)
 
 ### 5.8 AI 도사 (`/oracle`) 🆕
 
@@ -664,8 +696,8 @@ flowchart TD
 
 ---
 
-**문서 버전:** 2.7.11 (Phase 5 완료 + Phase 5.5 프론트 연동·DB 제약 보강 체크리스트 반영)  
-**최종 수정일:** 2026-01-19
+**문서 버전:** 2.7.18 (온보딩/마이페이지 사주 재계산 플로우, `/user/onboarding` 재온보딩 연동 및 hasCompletedOnboarding 기반 필수 온보딩 플로우 반영)  
+**최종 수정일:** 2026-01-20
 
 ### 수정 요약 (2026-01-19)
 

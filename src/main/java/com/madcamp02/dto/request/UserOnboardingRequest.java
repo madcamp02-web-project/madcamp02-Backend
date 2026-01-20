@@ -17,6 +17,7 @@ package com.madcamp02.dto.request;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -26,6 +27,15 @@ import java.time.LocalTime;
 @Getter
 @NoArgsConstructor
 public class UserOnboardingRequest {
+
+    //------------------------------------------
+    // nickname (선택)
+    //------------------------------------------
+    // 온보딩 단계에서 닉네임을 함께 수정하고 싶을 때 사용
+    // - null 또는 빈 문자열이면 닉네임은 변경하지 않음
+    //------------------------------------------
+    @Size(max = 50, message = "닉네임은 최대 50자까지 가능합니다.")
+    private String nickname;
 
     //------------------------------------------
     // birthDate (필수)
