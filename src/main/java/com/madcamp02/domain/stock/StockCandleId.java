@@ -13,4 +13,5 @@ import java.time.LocalDate;
 public class StockCandleId implements Serializable {
     private String symbol;
     private LocalDate date;
+    private String period; // d (daily), w (weekly), m (monthly)
 }

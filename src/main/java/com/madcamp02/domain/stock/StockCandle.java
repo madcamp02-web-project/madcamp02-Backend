@@ -24,6 +24,10 @@ public class StockCandle {
     @Column(nullable = false)
     private LocalDate date;
 
+    @Id
+    @Column(nullable = false, length = 1)
+    private String period; // d (daily), w (weekly), m (monthly)
+
     @Column(precision = 19, scale = 4)
     private BigDecimal open;
 

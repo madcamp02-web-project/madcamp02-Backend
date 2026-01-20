@@ -19,9 +19,16 @@ package com.madcamp02.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
+
 @Configuration  // 이 클래스가 Bean 설정 파일임을 스프링에게 알림
+@EnableScheduling // 스케줄러 활성화 (@Scheduled 어노테이션 사용 가능)
 public class AppConfig {
 
     /**
@@ -59,5 +66,30 @@ public class AppConfig {
     @Bean
     public ObjectMapper objectMapper() {
         return new ObjectMapper();
+    }
+
+    /**
+     * 웹소켓 거래 데이터 브로드캐스트용 비동기 ExecutorService
+     * 
+     * TradePriceBroadcastService에서 Redis 캐시 업데이트와 STOMP 브로드캐스트를
+     * 비동기로 처리하기 위한 전용 스레드 풀입니다.
+     * 
+     * 스레드 풀 크기: CPU 코어 수 * 2 (I/O 집약적 작업에 최적화)
+     * 
+     * @return ExecutorService 인스턴스
+     */
+    @Bean(name = "tradeBroadcastExecutor")
+    public ExecutorService tradeBroadcastExecutor() {
+        int poolSize = Math.max(4, Runtime.getRuntime().availableProcessors() * 2);
+        return Executors.newFixedThreadPool(poolSize, new ThreadFactory() {
+            private final AtomicInteger threadNumber = new AtomicInteger(1);
+            
+            @Override
+            public Thread newThread(Runnable r) {
+                Thread t = new Thread(r, "trade-broadcast-" + threadNumber.getAndIncrement());
+                t.setDaemon(true);
+                return t;
+            }
+        });
     }
 }

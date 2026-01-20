@@ -1,6 +1,6 @@
 # 📁 MadCamp02: 최종 통합 명세서
 
-**Ver 2.7.13 - Complete Edition (Spec-Driven Alignment)**
+**Ver 2.7.15 - Complete Edition (Spec-Driven Alignment)**
 
 ---
 
@@ -30,6 +30,8 @@
 | **2.7.11** | **2026-01-19** | **프론트 2.7.11 스냅샷 반영: Phase 5 완료 기반 “Phase 5.5: 프론트 연동·DB 제약 보강” 추가(Shop/Gacha/Inventory/Ranking 실데이터 전환 체크리스트, `{items:[]}`·카테고리/ETF/STOMP 정합성 재확인)** | **MadCamp02** |
 | **2.7.12** | **2026-01-19** | **Phase 5.5 실행: `/api/v1/game/*` 응답 DTO/에러 코드(GAME_001~003)·items.category CHECK 제약·랭킹 필터(is_ranking_joined) 구현 상태를 스펙과 최종 정합화** | **MadCamp02** |
 | **2.7.13** | **2026-01-19** | **Phase 6: 실시간 통신(10장) 추가 - STOMP 토픽/payload 스키마, Finnhub WebSocket 제약사항, ticker destination 안전성 정책 고정 (FinnhubTradesWebSocketClient/TradePriceBroadcastService/StompDestinationUtils 기준)** | **MadCamp02** |
+| **2.7.14** | **2026-01-19** | **Phase 3.6: 백엔드 Redis 캐싱 확장 (Market Indices/News/Movers) 및 프론트엔드 이중 캐싱 전략 수립** | **MadCamp02** |
+| **2.7.15** | **2026-01-19** | **5.3.1: Candles API 상세 명세 보강 (Request/Response DTO, 날짜 범위 필터링, period 필드, 배치 로드 전략 상세 설명 추가)** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -484,13 +486,31 @@ _(나머지 테이블 `wallet`, `portfolio`, `trade_logs`, `inventory`, `watchli
 
 ### 5.2 사용자 API (`/api/v1/user`)
 
-| Method | Endpoint      | 설명                                                            |
-| ------ | ------------- | --------------------------------------------------------------- |
-| GET    | `/me`         | 내 프로필 상세 조회 (`UserMeResponse`, email 포함)              |
-| PUT    | `/me`         | 프로필/설정 수정 (닉네임, 공개여부 등)                          |
-| POST   | `/onboarding` | 온보딩 (정밀 사주 계산: 4주 완전 구현, 한국천문연구원 API 연동) |
-| GET    | `/wallet`     | 지갑 정보 (예수금, 코인 등)                                     |
-| GET    | `/{userId}`   | 타인 프로필 공개 조회 (향후, `UserPublicResponse`, email 제외)  |
+| Method | Endpoint           | 설명                                                            |
+| ------ | ------------------ | --------------------------------------------------------------- |
+| GET    | `/me`              | 내 프로필 상세 조회 (`UserMeResponse`, email 포함)              |
+| PUT    | `/me`              | 프로필/설정 수정 (닉네임, 공개여부 등)                          |
+| POST   | `/onboarding`      | 온보딩 (정밀 사주 계산: 4주 완전 구현, 한국천문연구원 API 연동) |
+| GET    | `/wallet`          | 지갑 정보 (예수금, 코인 등)                                     |
+| GET    | `/watchlist`       | 내 관심종목 조회 (`UserWatchlistResponse`)                      |
+| POST   | `/watchlist`       | 관심종목 추가 (Request: `{ ticker: string }`)                   |
+| DELETE | `/watchlist/{ticker}` | 관심종목 삭제                                                |
+| GET    | `/{userId}`        | 타인 프로필 공개 조회 (향후, `UserPublicResponse`, email 제외)  |
+
+#### 5.2.1 Watchlist API
+
+**GET /api/v1/user/watchlist**
+- Response: `{ items: [{ ticker, addedAt }] }`
+- 인증: JWT 필요
+
+**POST /api/v1/user/watchlist**
+- Request: `{ ticker: string }`
+- Response: `UserWatchlistResponse` (전체 목록)
+- 중복 시 idempotent하게 무시
+
+**DELETE /api/v1/user/watchlist/{ticker}**
+- Path Variable: `ticker`
+- Response: `UserWatchlistResponse` 또는 204 No Content
 
 ### 5.3 시장/주식 API (`/api/v1/market`, `/api/v1/stock`) 🆕
 
@@ -505,22 +525,79 @@ _(나머지 테이블 `wallet`, `portfolio`, `trade_logs`, `inventory`, `watchli
 
 #### 5.3.1 Historical Data (Candles) API 동작 방식
 
+**엔드포인트**: `GET /api/v1/stock/candles/{ticker}`
+
+**Request 파라미터**:
+- `ticker` (path, required): 종목 심볼 (예: "AAPL")
+- `resolution` (query, required): 시간 간격 (`d`=daily, `w`=weekly, `m`=monthly)
+- `from` (query, required): 시작 시간 (ISO-8601 형식, 예: "2024-01-19T00:00:00Z")
+- `to` (query, required): 종료 시간 (ISO-8601 형식, 예: "2026-01-19T23:59:59Z")
+
+**Response DTO**:
+```json
+{
+  "ticker": "AAPL",
+  "resolution": "d",
+  "items": [
+    {
+      "timestamp": 1705612800,
+      "open": 195.12,
+      "high": 196.50,
+      "low": 194.80,
+      "close": 195.50,
+      "volume": 50000000
+    }
+  ],
+  "stale": false
+}
+```
+
+**필드 설명**:
+- `ticker`: 종목 심볼
+- `resolution`: 요청한 시간 간격 (`d`, `w`, `m`)
+- `items`: 캔들 데이터 리스트 (요청한 날짜 범위(`from` ~ `to`) 내의 데이터만 포함)
+  - `timestamp`: UNIX timestamp (초 단위)
+  - `open`, `high`, `low`, `close`: OHLC 가격 데이터
+  - `volume`: 거래량
+- `stale`: 데이터가 구식인지 여부 (Quota 초과 시 기존 데이터 반환 표시, 기본값: `false`)
+
 **데이터 전략**: EODHD API + DB 캐싱 기반 (`docs/DATA_STRATEGY_PLAN.md` 참조)
 
+**날짜 범위 필터링**:
+- 프론트엔드에서 받은 `from`/`to` 파라미터를 `LocalDate`로 변환하여 DB 조회 시 날짜 범위 필터링 적용
+- DB 조회: `findAllBySymbolAndPeriodAndDateBetweenOrderByDateAsc(ticker, period, fromDate, toDate)`
+- EODHD API 호출 시에도 동일한 날짜 범위 전달
+- 응답의 `items` 배열에는 정확히 요청한 날짜 범위(`from` ~ `to`) 내의 데이터만 포함
+
+**`period` 필드**:
+- `stock_candles` 테이블에 `period` 필드 추가 (V8 마이그레이션)
+- `period` 값: `d` (daily), `w` (weekly), `m` (monthly)
+- 복합 Primary Key: `(symbol, date, period)`
+- 같은 종목, 같은 날짜라도 `period`가 다르면 별도 레코드로 저장
+
+**배치 로드 전략**:
+1. **전체 배치 로드**: d 데이터가 없을 때 d, w, m 모두 한번에 가져오기 (Quota 1회만 카운트)
+2. **부분 배치 로드**: d는 있지만 w, m 중 일부가 없을 때 누락된 것만 가져오기 (Quota 1회만 카운트)
+3. **개별 보완**: 요청된 resolution만 개별적으로 가져오기 (w 또는 m만 필요한 경우)
+
 **동작 흐름**:
-1. **DB 조회 우선**: `stock_candles` 테이블에서 해당 종목 데이터 조회
-2. **최신성 체크**: 오늘 장 종료 후 오늘 데이터 존재 여부 확인
-3. **Quota 체크**: `api_usage_logs` 테이블에서 오늘 EODHD 호출 횟수 확인 (일일 20회 제한)
-4. **분기 처리**:
+1. **날짜 변환**: `from`/`to` 파라미터를 `LocalDate`로 변환
+2. **배치 로드 체크**: d 데이터가 없으면 전체 배치 로드, w/m이 일부 없으면 부분 배치 로드
+3. **DB 조회**: 요청한 `period`와 날짜 범위로 DB 조회
+4. **개별 보완**: 요청된 resolution이 없으면 개별 보완 (w 또는 m만)
+5. **최신성 체크**: 오늘 장 종료 후 오늘 데이터 존재 여부 확인
+6. **Quota 체크**: `api_usage_logs` 테이블에서 오늘 EODHD 호출 횟수 확인 (일일 20회 제한)
+7. **분기 처리**:
    - **데이터 최신**: DB 데이터 반환 (API 호출 없음)
-   - **데이터 구식 + Quota 여유**: EODHD 호출 → DB 저장 → 데이터 반환
-   - **Quota 초과 + 기존 데이터 있음**: DB 데이터 반환 + `X-Data-Status: Stale` 헤더 또는 `warning` 필드 포함
+   - **데이터 구식 + Quota 여유**: EODHD 호출 → DB 저장 (UPSERT 전략) → 데이터 반환
+   - **Quota 초과 + 기존 데이터 있음**: DB 데이터 반환 + `stale: true` 표시
    - **Quota 초과 + 기존 데이터 없음**: `429 Too Many Requests` 에러 반환
 
 **⚠️ 주의사항**:
 - **무료 구독 제한**: EODHD 무료 플랜은 **최근 1년 데이터만 제공**합니다.
   - 1년 이전 날짜 범위 요청 시 `{"warning":"Data is limited by one year as you have free subscription"}` 경고 메시지가 반환될 수 있습니다.
   - 실제 캔들 데이터 없이 경고만 반환되는 경우, 응답에서 `warning` 필드를 체크하여 필터링해야 합니다.
+  - 백엔드 `EodhdClient`에서 `warning` 필드가 있는 응답은 자동으로 필터링하여 유효한 캔들 데이터만 저장합니다.
 - **티커 형식**: EODHD API는 `{SYMBOL}.{EXCHANGE_ID}` 형식을 권장합니다 (예: `AAPL.US`). 거래소 코드가 없으면 백엔드에서 자동으로 `.US`를 추가합니다.
 
 **초기 구축 전략 (Seed Data)**:
@@ -960,9 +1037,9 @@ MadCamp02는 **Spring WebSocket (STOMP)**를 사용하여 실시간 주가 데�
 
 | 토픽 패턴 | 설명 | 사용 시나리오 |
 |---------|------|-------------|
-| `/topic/stock.indices` | 시장 지수 업데이트 (10초 주기) | Market 페이지 (향후 구현) |
+| `/topic/stock.indices` | 시장 지수 업데이트 (10초 주기) | Market 페이지 |
 | `/topic/stock.ticker.{ticker}` | 개별 종목 체결가/호가 (실시간) | Trade 페이지 진입 시 구독 |
-| `/user/queue/trade` | 사용자 개인 주문 체결 알림 | 전역 구독 (향후 구현) |
+| `/user/queue/trade` | 사용자 개인 주문 체결 알림 | 전역 구독 |
 
 **토픽 구독 전략**:
 - **동적 구독**: 사용자가 종목 상세 페이지(`/trade`) 진입 시에만 해당 종목 구독
@@ -970,6 +1047,43 @@ MadCamp02는 **Spring WebSocket (STOMP)**를 사용하여 실시간 주가 데�
 - **프론트엔드 동작**: 페이지 이탈 시 명시적 구독 해제(`UNSUBSCRIBE`) 권장
 
 ### 10.3 STOMP 메시지 Payload 스키마
+
+#### `/topic/stock.indices` Payload
+
+**스키마**: `MarketIndicesResponse` (REST API와 동일)
+
+```json
+{
+  "items": [
+    {
+      "symbol": "SPY",
+      "name": "S&P 500",
+      "price": 4850.12,
+      "change": 25.50,
+      "changePercent": 0.53,
+      "timestamp": 1705672800000
+    },
+    {
+      "symbol": "QQQ",
+      "name": "NASDAQ-100",
+      "price": 4200.45,
+      "change": -10.20,
+      "changePercent": -0.24,
+      "timestamp": 1705672800000
+    },
+    {
+      "symbol": "DIA",
+      "name": "Dow Jones",
+      "price": 38000.00,
+      "change": 150.00,
+      "changePercent": 0.40,
+      "timestamp": 1705672800000
+    }
+  ]
+}
+```
+
+**브로드캐스트 주기**: 10초마다 (`@Scheduled(fixedDelay = 10000)`)
 
 #### `/topic/stock.ticker.{ticker}` Payload
 
@@ -1047,6 +1161,56 @@ MadCamp02는 **Spring WebSocket (STOMP)**를 사용하여 실시간 주가 데�
   - URL 인코딩이 필요한 경우 `StompDestinationUtils.createEncodedDestination()` 메서드를 사용할 수 있습니다
   - 예: `IC MARKETS:1` → `/topic/stock.ticker.IC%20MARKETS%3A1`
   - 현재는 인코딩 없이 사용하며, STOMP 프로토콜이 이를 지원합니다
+
+#### `/user/queue/trade` Payload
+
+**스키마**: `TradeNotificationDto`
+
+```json
+{
+  "orderId": 12345,
+  "ticker": "AAPL",
+  "type": "BUY",
+  "quantity": 10,
+  "executedPrice": 195.12,
+  "totalAmount": 1951.20,
+  "realizedPnl": null,
+  "executedAt": "2026-01-19T12:34:56",
+  "status": "FILLED"
+}
+```
+
+**필드 설명**:
+
+| 필드 | 타입 | 설명 |
+|-----|------|------|
+| `orderId` | number | 거래 로그 ID (`TradeLog.logId`) |
+| `ticker` | string | 종목 코드 |
+| `type` | string | 거래 타입 (`"BUY"` | `"SELL"`) |
+| `quantity` | number | 체결 수량 |
+| `executedPrice` | number | 체결 가격 |
+| `totalAmount` | number | 총 거래 금액 |
+| `realizedPnl` | number \| null | 실현 손익 (매도 시만, 매수 시는 `null`) |
+| `executedAt` | string | 체결 시각 (ISO-8601) |
+| `status` | string | 체결 상태 (`"FILLED"`, 향후 확장: `PARTIALLY_FILLED` 등) |
+
+**발행 시점**: `TradeService.executeBuyOrder()` 또는 `executeSellOrder()` 성공 후, 트랜잭션 커밋 후
+
+**예시 (매도 시)**:
+
+```json
+{
+  "orderId": 12346,
+  "ticker": "AAPL",
+  "type": "SELL",
+  "quantity": 5,
+  "executedPrice": 200.00,
+  "totalAmount": 1000.00,
+  "realizedPnl": 24.40,
+  "executedAt": "2026-01-19T12:35:10",
+  "status": "FILLED"
+}
+```
 
 ### 10.5 Finnhub WebSocket 제약사항
 
@@ -1141,6 +1305,64 @@ sequenceDiagram
 #### 13.1.3 Market Movers 캐싱 (구현 완료)
 
 - **Redis 캐싱**: `MarketService.getMovers()` 결과를 Redis에 1분~5분간 캐싱
+
+#### 13.1.4 백엔드 Redis 캐싱 확장 (Phase 3.6) 🆕
+
+**목표**: Market Indices, News, Movers에 대한 Redis 캐싱을 확장하여 프론트엔드 localStorage 캐싱과 이중 캐싱 전략 수립
+
+**캐시 전략**:
+
+1. **Redis 캐시 키 및 TTL**:
+   - `market:indices` - TTL: 1분 (60초)
+   - `market:news` - TTL: 5분 (300초)
+   - `market:movers` - TTL: 1-5분 (기존 구현 유지)
+
+2. **Stale 데이터 백업**:
+   - TTL 만료 후에도 `market:{type}:stale` 키로 추가 저장 (TTL: 1시간)
+   - API 실패 시 Stale 데이터 반환하여 서비스 지속성 보장
+
+3. **응답 헤더**:
+   - `X-Cache-Status`: `HIT` (캐시 Hit), `MISS` (API 호출), `STALE` (만료 데이터 사용)
+   - `X-Cache-Age`: 캐시 생성 후 경과 시간 (초)
+   - `X-Data-Freshness`: `FRESH` (최신), `STALE` (만료되었지만 사용 가능), `EXPIRED` (만료)
+
+4. **프론트엔드 연계**:
+   - 프론트엔드는 `X-Cache-Status` 헤더를 확인하여 캐시 상태 표시
+   - 백엔드 Redis 캐시와 프론트엔드 localStorage 캐시의 이중 보호
+   - 백엔드에서 Stale 데이터를 반환해도 프론트엔드는 표시 가능
+
+**데이터 흐름**:
+```mermaid
+sequenceDiagram
+    participant Frontend as 프론트엔드
+    participant Backend as 백엔드
+    participant Redis as Redis Cache
+    participant API as 외부 API (Finnhub)
+    
+    Frontend->>Backend: GET /api/v1/market/indices
+    Backend->>Redis: GET market:indices
+    alt Cache Hit
+        Redis-->>Backend: 캐시된 데이터
+        Backend-->>Frontend: 200 OK + X-Cache-Status: HIT
+    else Cache Miss
+        Backend->>API: API 호출
+        alt API Success
+            API-->>Backend: 최신 데이터
+            Backend->>Redis: SET market:indices (TTL: 1분)
+            Backend->>Redis: SET market:indices:stale (TTL: 1시간)
+            Backend-->>Frontend: 200 OK + X-Cache-Status: MISS
+        else API Failure
+            Backend->>Redis: GET market:indices:stale
+            alt Stale Cache Exists
+                Redis-->>Backend: Stale 데이터
+                Backend-->>Frontend: 200 OK + X-Cache-Status: STALE
+            else No Stale Cache
+                Backend-->>Frontend: 500 Internal Server Error
+            end
+        end
+    end
+    Frontend->>Frontend: localStorage에 저장 (프론트엔드 캐시)
+```
 - **DB 관리**: `Top 20 Market Cap` 리스트를 `market_cap_stocks` 테이블로 관리 (Flyway V6)
   - Entity: `MarketCapStock` (`symbol`, `company_name`, `market_cap_rank`, `is_active`)
   - Repository: `MarketCapStockRepository.findByIsActiveTrueOrderByMarketCapRankAsc()`
@@ -1192,10 +1414,10 @@ CREATE INDEX idx_market_cap_stocks_active ON market_cap_stocks(is_active) WHERE 
 **초기 데이터**: Top 20 Market Cap 종목 (2026-01-19 기준)
 - 시가총액 순위는 변동될 수 있으므로, 향후 관리자 API로 업데이트 가능하도록 설계
 
-**향후 확장 가능성** (Phase 10 계획):
-1. **관리자 API**: 종목 리스트 업데이트 엔드포인트 (Phase 10.1)
-2. **자동 갱신**: 스케줄러로 시가총액 순위 자동 업데이트 (Phase 10.2)
-3. **다른 시장**: 한국/일본 등 다른 시장의 Top 20 추가 (Phase 10.3)
+**향후 확장 가능성** (Phase 9 계획):
+1. **관리자 API**: 종목 리스트 업데이트 엔드포인트 (Phase 9.1)
+2. **자동 갱신**: 스케줄러로 시가총액 순위 자동 업데이트 (Phase 9.2)
+3. **다른 시장**: 한국/일본 등 다른 시장의 Top 20 추가 (Phase 9.3)
 
 #### stock_candles (Flyway V5)
 
@@ -1254,10 +1476,10 @@ CREATE TABLE api_usage_logs (
    - 비인기 종목은 Primary Provider만 사용하여 Quota 절약
 
 **구현 우선순위**:
-- Phase 9.1: `HistoricalDataProvider` 인터페이스 설계 및 EODHD를 Provider로 리팩토링
-- Phase 9.2: Alpha Vantage 또는 다른 무료 API Provider 추가 구현
-- Phase 9.3: `ProviderManager` 구현 및 자동 전환 로직
-- Phase 9.4: 데이터 병합 및 Fallback 메커니즘 구현
+- Phase 8.1: `HistoricalDataProvider` 인터페이스 설계 및 EODHD를 Provider로 리팩토링
+- Phase 8.2: Alpha Vantage 또는 다른 무료 API Provider 추가 구현
+- Phase 8.3: `ProviderManager` 구현 및 자동 전환 로직
+- Phase 8.4: 데이터 병합 및 Fallback 메커니즘 구현
 
 ### 13.4 Market Movers 관리 기능 (향후 개선)
 
@@ -1278,9 +1500,9 @@ CREATE TABLE api_usage_logs (
    - 에러 처리: API 실패 시 기존 데이터 유지, 로그 기록
 
 **구현 우선순위**:
-- Phase 10.1: 관리자 API 구현 (인증/인가 포함)
-- Phase 10.2: 스케줄러 구현 및 외부 API 연동
-- Phase 10.3: 자동 갱신 로직 및 에러 처리
+- Phase 9.1: 관리자 API 구현 (인증/인가 포함)
+- Phase 9.2: 스케줄러 구현 및 외부 API 연동
+- Phase 9.3: 자동 갱신 로직 및 에러 처리
 
 ---
 

@@ -11,6 +11,7 @@ import com.madcamp02.domain.wallet.WalletRepository;
 import com.madcamp02.dto.request.TradeOrderRequest;
 import com.madcamp02.dto.response.StockQuoteResponse;
 import com.madcamp02.dto.response.TradeHistoryResponse;
+import com.madcamp02.dto.response.TradeNotificationDto;
 import com.madcamp02.dto.response.TradeResponse;
 import com.madcamp02.exception.BusinessException;
 import com.madcamp02.exception.ErrorCode;
@@ -22,6 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,6 +48,7 @@ public class TradeService {
     private final TradeLogRepository tradeLogRepository;
     private final UserRepository userRepository;
     private final StockService stockService;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Autowired
     @Lazy
@@ -159,7 +162,10 @@ public class TradeService {
         log.info("매수 주문 완료: userId={}, ticker={}, quantity={}, totalAmount={}",
                 userId, request.getTicker(), request.getQuantity(), totalAmount);
 
-        // 6. 응답 생성
+        // 6. STOMP 브로드캐스트 (체결 알림)
+        broadcastTradeNotification(userId, tradeLog, currentPrice, totalAmount, null);
+
+        // 7. 응답 생성
         return TradeResponse.builder()
                 .orderId(tradeLog.getLogId())
                 .ticker(request.getTicker())
@@ -240,7 +246,10 @@ public class TradeService {
         log.info("매도 주문 완료: userId={}, ticker={}, quantity={}, totalAmount={}, realizedPnl={}",
                 userId, request.getTicker(), request.getQuantity(), totalAmount, realizedPnl);
 
-        // 9. 응답 생성
+        // 9. STOMP 브로드캐스트 (체결 알림)
+        broadcastTradeNotification(userId, tradeLog, currentPrice, totalAmount, realizedPnl);
+
+        // 10. 응답 생성
         return TradeResponse.builder()
                 .orderId(tradeLog.getLogId())
                 .ticker(request.getTicker())
@@ -295,5 +304,52 @@ public class TradeService {
                 .asOf(LocalDateTime.now().toString())
                 .items(items)
                 .build();
+    }
+
+    /**
+     * 거래 체결 알림 STOMP 브로드캐스트
+     * 
+     * 트랜잭션 커밋 후 `/user/queue/trade` 토픽으로 사용자에게 체결 알림을 전송합니다.
+     * 
+     * @param userId 사용자 ID
+     * @param tradeLog 거래 로그
+     * @param executedPrice 체결 가격
+     * @param totalAmount 총 거래 금액
+     * @param realizedPnl 실현 손익 (매도 시만, 매수 시는 null)
+     */
+    private void broadcastTradeNotification(
+            Long userId,
+            TradeLog tradeLog,
+            BigDecimal executedPrice,
+            BigDecimal totalAmount,
+            BigDecimal realizedPnl
+    ) {
+        try {
+            TradeNotificationDto notification = TradeNotificationDto.builder()
+                    .orderId(tradeLog.getLogId())
+                    .ticker(tradeLog.getTicker())
+                    .type(tradeLog.getTradeType().name()) // "BUY" | "SELL"
+                    .quantity(tradeLog.getQuantity())
+                    .executedPrice(executedPrice.doubleValue())
+                    .totalAmount(totalAmount.doubleValue())
+                    .realizedPnl(realizedPnl != null ? realizedPnl.doubleValue() : null)
+                    .executedAt(tradeLog.getTradeDate().toString()) // ISO-8601
+                    .status("FILLED") // 향후 확장: PARTIALLY_FILLED 등
+                    .build();
+
+            // 사용자별 큐로 전송: /user/{userId}/queue/trade
+            messagingTemplate.convertAndSendToUser(
+                    userId.toString(),
+                    "/queue/trade",
+                    notification
+            );
+
+            log.debug("거래 체결 알림 발행: userId={}, ticker={}, type={}",
+                    userId, tradeLog.getTicker(), tradeLog.getTradeType());
+        } catch (Exception e) {
+            log.error("거래 체결 알림 발행 실패: userId={}, ticker={}",
+                    userId, tradeLog.getTicker(), e);
+            // STOMP 발행 실패해도 REST 응답은 정상 반환
+        }
     }
 }

@@ -38,6 +38,8 @@ import com.madcamp02.domain.user.User;
 import com.madcamp02.domain.user.UserRepository;
 import com.madcamp02.domain.wallet.Wallet;
 import com.madcamp02.domain.wallet.WalletRepository;
+import com.madcamp02.domain.watchlist.Watchlist;
+import com.madcamp02.domain.watchlist.WatchlistRepository;
 import com.madcamp02.dto.request.EmailLoginRequest;
 import com.madcamp02.dto.request.LoginRequest;
 import com.madcamp02.dto.request.SignupRequest;
@@ -57,6 +59,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
 import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 //어노테이션에 대해서...
@@ -104,6 +107,7 @@ public class AuthService {
 
     private final UserRepository userRepository;      // DB에서 유저 정보를 찾거나 저장할 때 사용
     private final WalletRepository walletRepository;  // 회원가입 시 지갑을 만들어주기 위해 사용
+    private final WatchlistRepository watchlistRepository; // 기본 관심종목을 저장하기 위해 사용
     private final JwtTokenProvider jwtTokenProvider;  // JWT 토큰을 만들고, 검증하고, 해석하는 도구
     private final RedisTemplate<String, String> redisTemplate; // Refresh Token을 저장할 메모리 DB(Redis) 도구
     private final PasswordEncoder passwordEncoder;   // 비밀번호를 안전하게 암호화(BCrypt)하고, 검증하는 도구
@@ -185,6 +189,8 @@ public class AuthService {
                     .user(user)
                     .build();
             walletRepository.save(wallet); // DB에 지갑 저장 (INSERT)
+            // 기본 관심종목 설정
+            addDefaultWatchlist(user);
         }
 
         // [4단계: 우리 앱 전용 토큰(JWT) 발급]
@@ -509,6 +515,9 @@ public class AuthService {
                     .user(user)
                     .build();
             walletRepository.save(wallet);
+
+            // 기본 관심종목 설정
+            addDefaultWatchlist(user);
         }
 
         // [5단계: JWT 토큰 발급]
@@ -539,6 +548,26 @@ public class AuthService {
     //==========================================
     // Private Helper Methods
     //==========================================
+
+    /**
+     * 신규 가입 사용자에게 기본 관심종목을 부여한다.
+     */
+    private void addDefaultWatchlist(User user) {
+        List<String> defaultTickers = List.of("AAPL", "MSFT", "GOOGL", "AMZN", "NVDA");
+
+        for (String ticker : defaultTickers) {
+            // 중복 방지: 이미 존재하면 건너뜀
+            if (watchlistRepository.existsByUserUserIdAndTicker(user.getUserId(), ticker)) {
+                continue;
+            }
+
+            Watchlist watchlist = Watchlist.builder()
+                    .user(user)
+                    .ticker(ticker)
+                    .build();
+            watchlistRepository.save(watchlist);
+        }
+    }
 
     /**
      * Google ID Token 검증

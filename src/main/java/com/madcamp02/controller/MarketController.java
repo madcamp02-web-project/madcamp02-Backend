@@ -19,9 +19,11 @@ import com.madcamp02.dto.response.MarketIndicesResponse;
 import com.madcamp02.dto.response.MarketMoversResponse;
 import com.madcamp02.dto.response.MarketNewsResponse;
 import com.madcamp02.service.MarketService;
+import com.madcamp02.service.cache.CacheResult;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -40,12 +42,24 @@ public class MarketController {
     //------------------------------------------
     // 요청: GET /api/v1/market/indices
     // 인증: 불필요 (Public API)
+    // 응답 헤더:
+    // - X-Cache-Status: HIT, MISS, STALE
+    // - X-Cache-Age: 캐시 생성 후 경과 시간 (초)
+    // - X-Data-Freshness: FRESH, STALE, EXPIRED
     //------------------------------------------
     @Operation(summary = "주요 지수 조회", description = "NASDAQ, S&P500, Dow Jones 등 주요 미국 시장 지수 조회")
     @GetMapping("/indices")
     public ResponseEntity<MarketIndicesResponse> getIndices() {
-        MarketIndicesResponse response = marketService.getIndices();
-        return ResponseEntity.ok(response);
+        CacheResult<MarketIndicesResponse> cacheResult = marketService.getIndices();
+        
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("X-Cache-Status", cacheResult.getCacheStatus().name());
+        headers.add("X-Cache-Age", String.valueOf(cacheResult.getCacheAge()));
+        headers.add("X-Data-Freshness", cacheResult.getDataFreshness().name());
+        
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(cacheResult.getData());
     }
 
     //------------------------------------------
@@ -53,12 +67,24 @@ public class MarketController {
     //------------------------------------------
     // 요청: GET /api/v1/market/news
     // 인증: 불필요 (Public API)
+    // 응답 헤더:
+    // - X-Cache-Status: HIT, MISS, STALE
+    // - X-Cache-Age: 캐시 생성 후 경과 시간 (초)
+    // - X-Data-Freshness: FRESH, STALE, EXPIRED
     //------------------------------------------
     @Operation(summary = "시장 뉴스 조회", description = "최신 시장 뉴스 조회")
     @GetMapping("/news")
     public ResponseEntity<MarketNewsResponse> getNews() {
-        MarketNewsResponse response = marketService.getNews();
-        return ResponseEntity.ok(response);
+        CacheResult<MarketNewsResponse> cacheResult = marketService.getNews();
+        
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("X-Cache-Status", cacheResult.getCacheStatus().name());
+        headers.add("X-Cache-Age", String.valueOf(cacheResult.getCacheAge()));
+        headers.add("X-Data-Freshness", cacheResult.getDataFreshness().name());
+        
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(cacheResult.getData());
     }
 
     //------------------------------------------
@@ -66,11 +92,23 @@ public class MarketController {
     //------------------------------------------
     // 요청: GET /api/v1/market/movers
     // 인증: 불필요 (Public API)
+    // 응답 헤더:
+    // - X-Cache-Status: HIT, MISS, STALE
+    // - X-Cache-Age: 캐시 생성 후 경과 시간 (초)
+    // - X-Data-Freshness: FRESH, STALE, EXPIRED
     //------------------------------------------
     @Operation(summary = "급등/급락 종목 조회", description = "급등/급락/거래량 상위 종목 조회")
     @GetMapping("/movers")
     public ResponseEntity<MarketMoversResponse> getMovers() {
-        MarketMoversResponse response = marketService.getMovers();
-        return ResponseEntity.ok(response);
+        CacheResult<MarketMoversResponse> cacheResult = marketService.getMovers();
+        
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("X-Cache-Status", cacheResult.getCacheStatus().name());
+        headers.add("X-Cache-Age", String.valueOf(cacheResult.getCacheAge()));
+        headers.add("X-Data-Freshness", cacheResult.getDataFreshness().name());
+        
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(cacheResult.getData());
     }
 }

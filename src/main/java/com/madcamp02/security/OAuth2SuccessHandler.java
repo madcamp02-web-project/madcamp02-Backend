@@ -24,6 +24,8 @@ import com.madcamp02.domain.user.User;
 import com.madcamp02.domain.user.UserRepository;
 import com.madcamp02.domain.wallet.Wallet;
 import com.madcamp02.domain.wallet.WalletRepository;
+import com.madcamp02.domain.watchlist.Watchlist;
+import com.madcamp02.domain.watchlist.WatchlistRepository;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -40,6 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -52,6 +55,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     private final WalletRepository walletRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final RedisTemplate<String, String> redisTemplate;
+    private final WatchlistRepository watchlistRepository;
 
     // 프론트엔드 리다이렉트 URL (로그인 성공 후 이동할 페이지)
     @Value("${app.oauth2.redirect-uri:http://localhost:3000/oauth/callback}")
@@ -115,6 +119,9 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
                     .build();
             walletRepository.save(wallet);
 
+            // 기본 관심종목 설정
+            addDefaultWatchlist(user);
+
             log.info("신규 사용자 생성 - UserId: {}, Email: {}", user.getUserId(), email);
         }
 
@@ -143,7 +150,29 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
                 .build().toUriString();
 
         log.info("프론트엔드로 리다이렉트 - URL: {}", targetUrl);
+        log.info("발급된 Access Token (처음 20자): {}...", accessToken != null && accessToken.length() > 20 ? accessToken.substring(0, 20) : accessToken);
+        log.info("발급된 Refresh Token (처음 20자): {}...", refreshToken != null && refreshToken.length() > 20 ? refreshToken.substring(0, 20) : refreshToken);
+        log.info("사용자 정보 - UserId: {}, Email: {}, Nickname: {}", user.getUserId(), user.getEmail(), user.getNickname());
 
         getRedirectStrategy().sendRedirect(request, response, targetUrl);
+    }
+
+    /**
+     * OAuth2 신규 사용자에게 기본 관심종목을 부여한다.
+     */
+    private void addDefaultWatchlist(User user) {
+        List<String> defaultTickers = List.of("AAPL", "MSFT", "GOOGL", "AMZN", "NVDA");
+
+        for (String ticker : defaultTickers) {
+            if (watchlistRepository.existsByUserUserIdAndTicker(user.getUserId(), ticker)) {
+                continue;
+            }
+
+            Watchlist watchlist = Watchlist.builder()
+                    .user(user)
+                    .ticker(ticker)
+                    .build();
+            watchlistRepository.save(watchlist);
+        }
     }
 }
