@@ -1,6 +1,6 @@
 # ⚙️ MadCamp02: 백엔드 개발 계획서
 
-**Ver 2.7.17 - Backend Development Blueprint (Spec-Driven Alignment)**
+**Ver 2.7.21 - Backend Development Blueprint (Spec-Driven Alignment)**
 
 ---
 
@@ -37,6 +37,8 @@
 | **2.7.18** | **2026-01-20** | **`POST /api/v1/user/onboarding`가 최초 온보딩과 마이페이지 사주 정보 수정 시 재계산(재온보딩)을 모두 처리하는 idempotent 엔드포인트임을 명시하고, 재온보딩 시 `users.*` 사주 관련 컬럼을 안전하게 덮어쓰도록 정책을 고정. 온보딩 완료 여부는 별도 플래그 없이 `users.birth_date + users.saju_element` 조합으로 해석함을 명시.** | **MadCamp02** |
 | **2.7.19** | **2026-01-21** | **환율 테이블(`exchange_rates`) 및 한국수출입은행 Open API 기반 환율 수집 배치/조회 API(`/api/v1/exchange-rates`) 설계·구현 현황과 Calc API(배당/세금 계산) 1차 버전 쿼리 파라미터/응답 규약을 문서에 반영. 온보딩 전용 에러 코드(ONBOARDING_001~003)와 `User.hasCompletedOnboarding()` 헬퍼 도입을 계획서에 기록.** | **MadCamp02** |
 | **2.7.20** | **2026-01-21** | **`GET /api/v1/auth/me` 응답에 `birthDate` 필드를 포함하도록 `AuthResponse`·`AuthController.me`·`AuthService`를 정리하고, `User.hasCompletedOnboarding()` 기준(`birthDate + sajuElement`)에 맞춰 온보딩 강제 플로우(백엔드/프론트 `hasCompletedOnboarding(user)`/AuthGuard)가 실제 구현과 정합하게 동작함을 확인. 개발/테스트 계정 더미 데이터(`V7__insert_test_data.sql`)의 비밀번호를 공통 값(평문 `Password123!`)으로 통일하고 주석으로 명시하여 로그인 시나리오를 문서화.** | **MadCamp02** |
+| **2.7.21** | **2026-01-21** | **프론트 연동 문서(`FRONTEND_API_WIRING`)와 3대 스펙 문서(Backend/Frontend Plan, Full Spec)의 “현재까지 완료된 구현/연동”을 단일 요약 섹션으로 통합 정리(계약/현황/미완료 항목 분리).** | **MadCamp02** |
+| **2.7.22** | **2026-01-21** | **AI 관련 상세 스펙(모델 전략, FastAPI AI Gateway, Spring SSE 프록시, `/oracle` 연동)은 `docs/AI_SERVER_SPEC.md` 1.1.0으로 이전하고, 본 문서에는 AI 연동을 요약+참조 형태로만 유지하도록 정리** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -83,6 +85,63 @@
 3.  **WebSocket 구독 관리자**: Finnhub 50 Symbols 제한 대응을 위한 Dynamic Subscription Manager (LRU 기반) 구현 계획 추가.
 4.  **Market Movers 캐싱**: Redis 기반 1분~5분 캐싱 전략 명시.
 5.  **에러 처리**: Quota 초과 시 Case A(기존 데이터 반환 + Stale 표시) 또는 Case B(429 에러) 분기 처리 명시.
+
+---
+
+## ✅ 현재까지 완료된 구현/연동 요약 (Snapshot)
+
+> 목적: “지금 당장 돌아가는 것(완료)”과 “백엔드가 유지해야 할 계약(필수)”을 한 눈에 고정합니다.  
+> 상세 프론트 관점 연결 상태는 `docs/FRONTEND_API_WIRING.md`를 단일 진실로 함께 참고합니다.
+
+### 1) 인증/Auth (Hybrid)
+
+- **완료**
+  - `POST /api/v1/auth/signup|login|refresh`, `GET /api/v1/auth/me`
+  - Frontend-Driven: `POST /api/v1/auth/oauth/kakao|google`
+  - Backend-Driven: `/oauth2/authorization/{provider}` → `/oauth/callback` 리다이렉트
+- **계약(중요)**
+  - `GET /api/v1/auth/me`는 프론트 `hasCompletedOnboarding(user)` 판단을 위해 `birthDate`, `sajuElement`(또는 `saju.element`)를 **항상** 포함
+  - Kakao 스코프는 `profile_nickname`만 필수, 이메일 미제공 시 백엔드가 임의 이메일 프로비저닝
+
+### 2) 온보딩/User
+
+- **완료**
+  - `POST /api/v1/user/onboarding`는 **최초 온보딩 + 재온보딩(마이페이지 사주 재계산)**을 모두 처리하는 **idempotent** 엔드포인트
+  - `GET/PUT /api/v1/user/me`, `GET /api/v1/user/wallet`, Watchlist CRUD
+- **계약(중요)**
+  - 온보딩 전용 에러 코드: `ONBOARDING_001~003`를 `ErrorResponse.error`로 내려주고(가능하면 `fieldErrors` 포함) 프론트가 코드 기반 UX를 유지할 수 있게 함
+
+### 3) Market/Stock (캐싱 포함)
+
+- **완료**
+  - Market: `GET /api/v1/market/indices|news|movers` (ETF: SPY/QQQ/DIA)
+  - Stock: search/quote/candles/orderbook 등 프론트가 요구하는 REST 계약 기반 연동
+- **계약(중요)**
+  - `/api/v1/market/**`는 `X-Cache-Status`, `X-Cache-Age`, `X-Data-Freshness` 헤더를 일관되게 포함(프론트는 헤더를 UI 배지로 노출)
+  - Candles는 EODHD 무료 제한(최근 1년) + Quota 정책에 따른 `stale`/에러 분기 유지
+
+### 4) Trade/Portfolio Engine
+
+- **완료**
+  - `GET /api/v1/trade/available-balance|portfolio|history`, `POST /api/v1/trade/order`
+  - 비관적 락/트랜잭션 전략 및 테스트 문서화
+
+### 5) Game/Shop/Inventory/Ranking
+
+- **완료**
+  - `GET /api/v1/game/items|inventory|ranking`, `POST /api/v1/game/gacha`, `PUT /api/v1/game/equip/{itemId}`
+  - 카테고리 규약 `NAMEPLATE|AVATAR|THEME`, 가챠 에러 코드 `GAME_001~003`
+
+### 6) Calc/FX (1차 버전)
+
+- **완료(1차)**
+  - Calc: `GET /api/v1/calc/dividend`, `GET /api/v1/calc/tax` (USD 기준 계산, `currency=null`)
+  - FX: `exchange_rates` 테이블 및 `/api/v1/exchange-rates`, `/api/v1/exchange-rates/latest` (설계/구현 현황 반영)
+
+### 7) 미완료/후속
+
+- **AI(SSE) 연동**: `POST /api/v1/chat/ask`의 SSE 프록시/저장/스트리밍 UX는 계획 대비 미완(프론트는 HTTP 호출 기반, SSE는 후속)
+- **관리자 기능/확장 전략**: Market Movers 관리자/다중 Historical Provider 등은 Phase 8~9로 유지
 
 ---
 
@@ -433,9 +492,13 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
 
 ### 9.3 FastAPI (AI 서버)
 
-- **Endpoint**: `POST /api/v1/chat/ask` (백엔드 프록시, SSE Streaming)
-  - 사용자의 포트폴리오 및 사주 정보를 컨텍스트로 포함하여 LLM에 질의
-  - 백엔드가 FastAPI 서버로 프록시하여 SSE 스트리밍 응답 제공
+- **역할 요약**
+  - FastAPI 기반 AI Gateway는 `/api/v1/ai/**` 엔드포인트를 통해 LLM Backend(vLLM/llama.cpp)를 호출하는 전용 서버이다.
+  - Spring 백엔드는 `AiClient`를 통해 이 Gateway를 호출하고, `ChatController`의 `POST /api/v1/chat/ask` 엔드포인트에서 SSE로 프론트(`/oracle`)에 스트리밍 응답을 중계한다.
+- **상세 스펙**
+  - 모델 전략(8B/20B/CPU Fallback), 프롬프트/페르소나, AI 서버 API(`/api/v1/ai/chat|oracle/advice|portfolio/explain|onboarding/summary`),  
+    Spring SSE 프록시 및 프론트 `/oracle` 클라이언트까지의 전체 흐름은  
+    **`docs/AI_SERVER_SPEC.md` v1.1.0**의 2~7장과 9장을 단일 진실로 사용한다.
 
 ---
 
@@ -1009,10 +1072,16 @@ sequenceDiagram
 - Phase 9.2: 스케줄러 구현 및 외부 API 연동
 - Phase 9.3: 자동 갱신 로직 및 에러 처리
 
-### 12.11 Phase 10: AI(SSE) 연동 (프론트 `/oracle`) - 맨 뒤로 이동
+### 12.11 Phase 10: AI(SSE) 연동 (프론트 `/oracle`)
 
-- **구현 대상**: `ChatController`(SSE), `ChatHistory` 저장, AI 서버 프록시/클라이언트
-- **엔드포인트**: `POST /api/v1/chat/ask` (SSE 스트리밍)
+- **목표**: 프론트 `/oracle` 페이지가 Spring 백엔드의 `POST /api/v1/chat/ask` 엔드포인트를 통해 FastAPI AI Gateway와 SSE로 안전하게 연동되도록 한다.
+- **구현 개요**:
+  - `AiClient`: FastAPI AI Gateway의 `/api/v1/ai/chat` 등을 호출하는 전용 HTTP 클라이언트.
+  - `ChatController`: `POST /api/v1/chat/ask`에서 SSE(`text/event-stream`)로 프론트에 스트리밍 응답을 전달.
+  - `ChatService`/`ChatHistory`: 질문·응답·사용 모델을 요약 형태로 저장해 로그/분석에 활용.
+- **상세 스펙**:
+  - SSE 포맷, 이벤트 타입(`message/done/error`), 에러 코드 매핑, 모델 라우팅/프롬프트 구성 등은  
+    **`docs/AI_SERVER_SPEC.md` v1.1.0의 3, 4, 6, 7, 9장을 단일 진실로 따른다.**
 
 ---
 

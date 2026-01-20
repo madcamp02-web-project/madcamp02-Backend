@@ -1,6 +1,6 @@
 # 🎨 MadCamp02: 프론트엔드 개발 계획서
 
-**Ver 2.7.18 - Frontend Development Blueprint (Spec-Driven Alignment)**
+**Ver 2.7.21 - Frontend Development Blueprint (Spec-Driven Alignment)**
 
 ---
 
@@ -30,7 +30,8 @@
 | **2.7.17** | **2026-01-20** | **마이페이지에서 생년월일/시간/성별/달력 타입/닉네임을 수정 후 `POST /api/v1/user/onboarding`을 호출해 사주를 재계산하는 재온보딩 플로우를 명시하고, 온보딩 페이지와 동일 DTO/스토어 동기화 규칙으로 통일.** | **MadCamp02** |
 | **2.7.18** | **2026-01-20** | **일반 회원가입 성공 시 자동 로그인 후 `/onboarding`으로 직행하도록 플로우를 고정하고, `hasCompletedOnboarding(user)`(= `birthDate + sajuElement`) 기반 온보딩 강제/라우팅 규칙 및 Investment Style의 프론트 전용 필드 성격을 문서화.** | **MadCamp02** |
 | **2.7.19** | **2026-01-21** | **계산기(`/calculator`) 페이지의 Calc API 연동(배당/세금 계산 1차 버전) 및 환율 조회 API(`/api/v1/exchange-rates`) 활용 계획, 다통화(currency) 확장 Future work를 문서에 반영.** | **MadCamp02** |
-| **2.7.20** | **2026-01-21** | **`auth-store.checkAuth()`가 `/api/v1/auth/me`의 `AuthResponse`를 프론트 `User` 타입으로 매핑하도록 구현(`id/email/nickname/provider/avatarUrl/birthDate/sajuElement` 등)하여, `hasCompletedOnboarding(user)`(= `!!user.birthDate && !!user.sajuElement`)와 `AuthGuard`의 온보딩 강제/차단 로직이 실제 동작과 일치하도록 정합성을 확보. 온보딩 완료 후 “Enter Dashboard” 시 더 이상 `/onboarding`으로 되돌아가지 않음을 확인.** | **MadCamp02** |
+| **2.7.21** | **2026-01-21** | **현재 프론트 구현/연동 완료 상태를 단일 Snapshot 섹션으로 정리하고, `FRONTEND_API_WIRING`과 본 계획서/통합 명세서 간 불일치 표현을 제거(“완료/미완료” 구분 고정).** | **MadCamp02** |
+| **2.7.22** | **2026-01-21** | **AI 도사(`/oracle`) 및 SSE 기반 AI 채팅 상세 스펙을 `docs/AI_SERVER_SPEC.md` v1.1.0으로 이전하고, 본 문서에는 `/oracle`·SSE 관련 내용을 요약+참조 형태로만 유지하도록 정리** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -72,6 +73,54 @@
 2.  **Historical Data API 동작**: EODHD + DB 캐싱 기반. Quota 초과 시 기존 데이터(Stale) 반환 또는 429 에러 처리.
 3.  **WebSocket 구독 관리**: 백엔드 LRU 기반 동적 구독 관리 전략 명시. 프론트는 페이지 이탈 시 명시적 구독 해제 권장.
 4.  **에러 처리 가이드**: `429 QUOTA_EXCEEDED` 에러 시 사용자 안내 메시지 표시, `X-Data-Status: Stale` 헤더 감지 시 UI 표시.
+
+---
+
+## ✅ 현재까지 프론트 구현/연동 완료 요약 (Snapshot)
+
+> 단일 진실(계약/연동 상세): `docs/FRONTEND_API_WIRING.md`  
+> 본 섹션은 “현재 실제 코드가 연결된 상태”만 요약해 고정합니다.
+
+### 1) 라우트/레이아웃
+
+- **완료**: `/`, `/market`, `/trade`, `/portfolio`, `/shop`, `/ranking`, `/oracle`, `/mypage`, `/login`, `/signup`, `/oauth/callback`, `/onboarding`, `/calculator`
+- **정리 규칙**: `/gacha`는 `/shop`으로 리다이렉트(라우팅 혼선 방지)
+
+### 2) 인증/온보딩 (강제 플로우 포함)
+
+- **완료**
+  - 이메일 로그인/회원가입 → 자동 로그인 → `hasCompletedOnboarding(user)` 기준 온보딩 강제
+  - 소셜 로그인: Backend-Driven Redirect + Frontend-Driven Token API 모두 지원
+  - `/oauth/callback`에서 토큰 저장 → `checkAuth()` → 신규/미완료면 `/onboarding`
+  - `AuthGuard`가 메인 영역 접근 전 온보딩 강제
+
+### 3) API 레이어
+
+- **완료**
+  - `src/lib/api/index.ts`에서 토큰 주입, 401 시 refresh 후 1회 retry
+  - `/api/v1/market/**` 응답 헤더(`X-Cache-Status|Age|Freshness`) 파싱 및 UI 노출 메타 저장
+  - 에러 파싱 유틸(`src/lib/api/error.ts`)로 표준화
+
+### 4) 페이지별 실데이터 연동
+
+- **완료**
+  - `/market`: indices/news/movers 실데이터 + 캐시 배지/STALE 안내
+  - `/trade`: search/quote/candles/orderbook + 주문 + 체결 알림(STOMP) 후 재조회
+  - `/portfolio`: portfolio/history/available-balance 연동
+  - `/shop`/`/ranking`/`/mypage`: game/user API 연동(카테고리 규약 `NAMEPLATE|AVATAR|THEME`)
+  - `/calculator`: Calc API(배당/세금) 1차 버전 연동(USD 기준, currency=null)
+
+### 5) 실시간(STOMP)
+
+- **완료**
+  - `/ws-stomp` 연결 및 `/topic/stock.indices`, `/topic/stock.ticker.{ticker}`, `/user/queue/trade` 구독 흐름 사용 가능
+- **후속(선택)**
+  - UI 폴리싱/구독 최적화(페이지 이탈 시 unsubscribe 명시 등)
+
+### 6) 미완료/후속
+
+- **SSE 기반 AI 스트리밍**: 현재는 HTTP 기반 호출 중심이며, SSE 스트리밍 UX/파싱/통합은 후속
+- **다통화(Calc)**: FX API 기반 통화 선택/환율 표시 및 Calc 응답의 `currency/fxAsOf/fxRateUsed` 확장은 Future work
 
 ---
 
@@ -475,9 +524,13 @@ interface TradeHistoryResponse {
 
 ### 5.8 AI 도사 (`/oracle`) 🆕
 
-- **채팅 UI**: 사용자와 AI 간 대화창.
-- **스트리밍 답변**: SSE를 통해 실시간으로 답변 생성되는 과정 표시.
-  - API: `POST /api/v1/chat/ask` (백엔드 프록시, SSE 스트리밍)
+- **역할 요약**: 사주/포트폴리오/랭킹 정보를 바탕으로 LLM이 도사 말투로 투자 조언을 해주는 채팅 페이지.
+- **연동 개요**:
+  - 프론트는 `src/stores/chat-store.ts`와 `src/lib/api/ai.ts`를 통해 Spring 백엔드의 `POST /api/v1/chat/ask`(SSE)를 호출한다.
+  - Spring은 FastAPI AI Gateway(`/api/v1/ai/**`)로 프록시하여 LLM 응답을 스트리밍으로 전달한다.
+- **상세 스펙**:
+  - SSE 이벤트 포맷, 프롬프트/페르소나, 모델 선택 규칙, `/oracle` UI와의 통합 흐름은  
+    **`docs/AI_SERVER_SPEC.md` v1.1.0의 3, 4, 6, 7장을 단일 진실로 사용**하며, 본 문서에서는 라우트/상태관리 관점의 요약만 유지한다.
 
 ### 5.9 계산기 (`/calculator`) 🆕
 
@@ -558,9 +611,15 @@ Zustand를 사용하여 전역 상태를 효율적으로 관리하고 컴포넌�
 
 ### 7.3 Server-Sent Events (SSE)
 
-- **Endpoint**: `POST /chat/ask` (AI 서버 직접 호출 또는 백엔드 프록시)
-- **Format**: JSON 데이터 스트림 (`event: message`, `data: {...}`)
-- **Parsing**: 스트림을 청크 단위로 받아 채팅 말풍선에 실시간 타이핑 효과 구현.
+- **Endpoint(프론트 관점)**: `POST /api/v1/chat/ask` (Spring 백엔드 → FastAPI AI Gateway 프록시)
+- **역할**:
+  - `/oracle` 페이지에서 AI 도사 답변을 **토큰 단위로 스트리밍** 받아 실시간 타이핑 효과를 구현한다.
+  - 네트워크 계층에서는 SSE 연결 수명/에러 처리/재시도 전략만 관리하고,  
+    프롬프트/모델 선택/응답 후처리는 모두 백엔드·AI 서버에서 담당한다.
+- **상세 프로토콜**:
+  - SSE 이벤트 타입(`message/done/error`), `data` JSON 구조, 에러 코드 매핑 등은  
+    **`docs/AI_SERVER_SPEC.md` v1.1.0의 4, 6, 7장을 단일 진실로 사용**하고,  
+    본 문서에는 Axios/STOMP/SSE라는 **기술 스택 수준의 개요만 유지**한다.
 
 ---
 
@@ -723,8 +782,8 @@ flowchart TD
 
 ---
 
-**문서 버전:** 2.7.20 (온보딩/마이페이지 사주 재계산 플로우 + `/auth/me` 응답 매핑 및 hasCompletedOnboarding·AuthGuard 라우팅 정합성 반영)  
-**최종 수정일:** 2026-01-21
+**문서 버전:** 2.7.18 (온보딩/마이페이지 사주 재계산 플로우, `/user/onboarding` 재온보딩 연동 및 hasCompletedOnboarding 기반 필수 온보딩 플로우 반영)  
+**최종 수정일:** 2026-01-20
 
 ### 수정 요약 (2026-01-19)
 

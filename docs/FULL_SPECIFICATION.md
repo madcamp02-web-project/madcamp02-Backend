@@ -1,6 +1,6 @@
 # 📁 MadCamp02: 최종 통합 명세서
 
-**Ver 2.7.17 - Complete Edition (Spec-Driven Alignment)**
+**Ver 2.7.21 - Complete Edition (Spec-Driven Alignment)**
 
 ---
 
@@ -36,7 +36,9 @@
 | **2.7.17** | **2026-01-20** | **Kakao OAuth 스코프를 `profile_nickname` 단일로 축소, 이메일 미동의 시 백엔드가 임의 이메일(`kakao-{timestamp}-{random}@auth.madcamp02.local`)을 생성·중복 검사 후 가입하도록 명시. 소셜 신규 로그인은 `isNewUser` 플래그를 통해 `/onboarding` 리다이렉트하도록 가이드(구글/카카오 공통).** | **MadCamp02** |
 | **2.7.18** | **2026-01-20** | **`POST /api/v1/user/onboarding`를 최초 온보딩과 마이페이지 사주 정보 재계산(재온보딩) 양쪽에서 사용하는 idempotent 엔드포인트로 고정하고, 소셜/일반 공통 온보딩 강제 플로우 및 `hasCompletedOnboarding` 판단 기준(`users.birth_date + users.saju_element`)을 명시.** | **MadCamp02** |
 | **2.7.19** | **2026-01-21** | **Calc API(배당/세금 계산) 1차 버전의 쿼리 파라미터/응답 스키마와 한국수출입은행 Open API 기반 환율 수집/조회 파이프라인(`exchange_rates` 테이블, `/api/v1/exchange-rates`)을 통합 명세에 반영. 온보딩 전용 에러 코드(ONBOARDING_001~003)도 ErrorCode 목록에 추가로 명시.** | **MadCamp02** |
-| **2.7.20** | **2026-01-21** | **인증 응답 DTO(`AuthResponse`)에 `birthDate` 필드를 추가하고, `/api/v1/auth/me`가 항상 최신 사용자 정보(`birthDate/sajuElement` 포함)를 반환하도록 구현된 내용을 반영. 프론트엔드가 이 응답을 `User.birthDate`·`User.sajuElement`로 매핑해 `hasCompletedOnboarding(user)` 유틸과 온보딩 강제 라우팅(`/onboarding` 가드)이 스펙과 완전히 일치하도록 정합성을 검증.** | **MadCamp02** |
+| **2.7.21** | **2026-01-21** | **프론트/백엔드 실제 구현 상태를 기준으로 “완료된 계약”을 Snapshot 섹션으로 고정하고, 문서 내 ‘구현 예정/완료’ 표현의 충돌을 정리(특히 Phase 5.5 관련 문구와 프론트 실연동 상태).** | **MadCamp02** |
+| **2.7.22** | **2026-01-21** | **AI 시스템 상세 스펙(모델 전략, AI 서버 API, Spring SSE 프록시, `/oracle` 연동)을 `docs/AI_SERVER_SPEC.md` v1.1.0으로 이전하고, 본 문서 9장은 전체 시스템 관점 요약+링크만 유지하도록 정리** | **MadCamp02** |
+| **2.7.23** | **2026-01-21** | **프론트엔드 도메인 변경에 맞춰 OAuth2 Redirect URL 예시 및 관련 설정에서 `http://localhost:3000`을 `http://madcampstock.duckdns.org`로 정규화** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -80,6 +82,41 @@
 2.  **EODHD + DB 캐싱**: Historical Candles 데이터를 DB에 저장하고 API 응답은 항상 DB에서 제공. Quota 관리 로직 추가.
 3.  **WebSocket 구독 관리**: Finnhub 50 Symbols 제한 대응을 위한 Dynamic Subscription Manager (LRU 기반) 전략 명시.
 4.  **API 제한 및 에러 처리**: Quota 초과 시 Case A(기존 데이터 반환 + Stale 표시) 또는 Case B(429 에러) 분기 처리 명시.
+
+---
+
+## ✅ 현재까지 완료된 계약/구현 요약 (Snapshot)
+
+> 목적: 본 문서(통합 명세)를 읽는 사람 기준으로 “이미 끝난 것”과 “반드시 유지해야 할 계약”을 한 블록에서 확인 가능하게 합니다.  
+> 프론트 연결 관점 상세는 `docs/FRONTEND_API_WIRING.md`를 함께 참고합니다.
+
+### 1) 인증/토큰/온보딩 강제
+
+- **완료된 계약**
+  - `/api/v1/auth/signup|login|refresh|me`, `/api/v1/auth/oauth/kakao|google`
+  - Backend-Driven OAuth Redirect → `/oauth/callback` 토큰 전달
+  - 온보딩 완료 판단: `birthDate + sajuElement`(또는 `saju.element`) 기반
+  - `POST /api/v1/user/onboarding`은 최초/재온보딩 공통 **idempotent**
+  - 에러: `ErrorResponse{ timestamp,status,error,message, fieldErrors? }` + `ONBOARDING_001~003`
+
+### 2) Market/Stock (캐시 포함) / Trade / Game
+
+- **완료된 계약**
+  - Market: indices/news/movers(ETF: SPY/QQQ/DIA) + 캐시 헤더 3종
+  - Stock: candles(EODHD+DB, stale/Quota 정책), search/quote/orderbook
+  - Trade: available-balance/order/portfolio/history(락/트랜잭션 전략 포함)
+  - Game: items/gacha/inventory/equip/ranking + 카테고리 `NAMEPLATE|AVATAR|THEME`, 에러 `GAME_001~003`
+
+### 3) Calc/FX (1차)
+
+- **완료된 계약**
+  - Calc: dividend/tax (USD 기준 계산, `currency=null`)
+  - FX: `/api/v1/exchange-rates`, `/api/v1/exchange-rates/latest` (환율 조회)
+
+### 4) 미완료/후속
+
+- **AI(SSE)**: `POST /api/v1/chat/ask`의 SSE 스트리밍/프록시/저장/UX 통합은 후속
+- **다통화(Calc)**: `currency` 파라미터 및 `fxAsOf/fxRateUsed` 포함 응답 확장은 후속
 
 ---
 
@@ -171,7 +208,7 @@ Finnhub 실시간 주가 데이터를 기반으로, **사용자의 투자 성과
 ```
 
 - **WebSocket (STOMP) Endpoint**: `/ws-stomp`
-- **Oracle SSE Endpoint**: `POST /api/v1/chat/ask` (백엔드 프록시)
+- **Oracle SSE Endpoint**: `POST /api/v1/chat/ask` (백엔드 프록시, SSE. 상세 스펙은 AI 시스템 장 및 `AI_SERVER_SPEC` 참조)
 
 ---
 
@@ -1118,7 +1155,7 @@ MadCamp02는 유연한 연동을 위해 두 가지 인증 흐름을 모두 제�
 1.  **로그인 요청**: 프론트엔드에서 `GET {BACKEND_URL}/oauth2/authorization/kakao`로 리다이렉트.
 2.  **인증 처리**: 백엔드에서 소셜 인증 후 JWT 생성.
 3.  **토큰 전달**: 백엔드가 프론트엔드의 `/oauth/callback`으로 리다이렉트하며 Query Parameter로 토큰 전달. _(프론트 라우트 구현: Phase 1)_
-    - 예: `http://localhost:3000/oauth/callback?accessToken=...&isNewUser=true`
+    - 예: `http://madcampstock.duckdns.org/oauth/callback?accessToken=...&isNewUser=true`
 4.  **세션 저장**: 프론트엔드에서 토큰 추출 후 스토리지 저장 및 `auth-store` 업데이트.
 5.  **Kakao 동의 스코프**: `profile_nickname` **단일 필수**로 요청한다. `account_email`은 요청하지 않으며, Kakao 응답에 이메일이 없을 경우 백엔드가 `kakao-{timestamp}-{random}@auth.madcamp02.local` 형식의 임의 이메일을 생성해 중복 검사 후 가입시킨다.
 
@@ -1653,5 +1690,5 @@ CREATE TABLE api_usage_logs (
 
 ---
 
-**문서 버전:** 2.7.20 (온보딩/마이페이지 사주 재계산 플로우 + `/auth/me`·`AuthResponse.birthDate`·hasCompletedOnboarding 정합성 반영)  
+**문서 버전:** 2.7.23 (프론트엔드 도메인 변경 및 OAuth2 Redirect URL 정규화 반영)  
 **최종 수정일:** 2026-01-21
