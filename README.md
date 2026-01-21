@@ -1,6 +1,6 @@
 # MadCamp02 Backend - 주술사 -
 
-Finnhub 실시간 시세 + 모의투자(거래/포트폴리오) + 게이미피케이션(가챠/인벤토리/랭킹) + 사주(온보딩) + (향후) AI 상담을 제공하는 **Spring Boot 기반 백엔드**입니다.
+Finnhub 실시간 시세 + 모의투자(거래/포트폴리오) + 게이미피케이션(가챠/인벤토리/랭킹) + 사주(온보딩) + (향후) AI 상담을 제공하는 **Spring Boot 기반 백엔드**
 
 ---
 
@@ -23,7 +23,7 @@ Finnhub 실시간 시세 + 모의투자(거래/포트폴리오) + 게이미피�
 - **Frontend**: Next.js 16 + React 19 + TypeScript 5.x + Tailwind CSS + Shadcn UI + Zustand + STOMP.js
 - **차트/시각화**: Lightweight Charts (캔들/라인 차트)
 - **네트워크 레이어**: Axios (REST), STOMP.js (WSS)
-- **AI 서버**: Python 3.11+ FastAPI + Gemini API (향후 SSE 스트리밍 연동)
+- **AI**: Python 3.11+ FastAPI + Gemini API (향후 SSE 스트리밍 연동 계획)
 - **인프라/배포**: Docker / docker-compose (PostgreSQL, Redis, Backend 컨테이너), GitHub Actions 기반 CI (Gradle 빌드 + 테스트)
 
 ---
@@ -32,17 +32,245 @@ Finnhub 실시간 시세 + 모의투자(거래/포트폴리오) + 게이미피�
 
 ```mermaid
 flowchart TB
-  FE[Frontend<br/>Next.js + STOMP.js] -->|HTTPS| BE[Backend<br/>Spring Boot]
-<<<<<<< HEAD
-  FE -->|WSS (STOMP) /ws-stomp| BE
-=======
-  FE -->|"WSS (STOMP) /ws-stomp"| BE
->>>>>>> 3308f732f5d21fee51c0a24c7d9d0939a3317698
+  subgraph Client["Client (Web)"]
+    FE[Frontend<br/>Next.js + STOMP.js]
+  end
 
-  BE -->|JPA| PG[(PostgreSQL)]
-  BE -->|Cache| RD[(Redis)]
-  BE -->|REST| FH[Finnhub API]
-  BE -->|WebSocket| FHWS[Finnhub WS<br/>Trades]
+  subgraph Server["Backend (Spring Boot)"]
+    BE[Core API<br/>Spring Boot 3]
+    WS[STOMP<br/>/ws-stomp]
+  end
+
+  subgraph Data["Data Layer"]
+    PG[(PostgreSQL 16)]
+    RD[(Redis 7)]
+  end
+
+  subgraph External["External Services"]
+    FH[Finnhub REST<br/>Quotes/News]
+    FHWS[Finnhub WS<br/>Trades]
+    AI[AI Server<br/>FastAPI + Gemini]
+  end
+
+  FE -->|HTTPS (REST)| BE
+  FE -->|WSS (STOMP)<br/>/ws-stomp| WS
+
+  BE -->|JPA| PG
+  BE -->|Cache<br/>Pub/Sub| RD
+
+  BE -->|REST| FH
+  BE -->|WebSocket<br/>Trades| FHWS
+  BE -->|HTTP (SSE Proxy)| AI
+```
+
+---
+
+## 시퀀스 다이어그램 (핵심 플로우)
+
+### 1) 인증/온보딩 (Hybrid Auth + 온보딩 강제)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant FE as Frontend
+  participant BE as Backend (Spring)
+  participant PG as PostgreSQL
+
+  rect rgb(245,245,245)
+    Note over FE,BE: Option A) Backend-Driven OAuth Redirect (Web 표준)
+    FE->>BE: GET /oauth2/authorization/{provider}
+    BE-->>FE: 302 Redirect -> Provider 로그인
+    FE-->>BE: (Provider Callback) redirect_uri
+    BE->>PG: 사용자 조회/프로비저닝
+    BE-->>FE: 302 Redirect -> /oauth/callback?accessToken&refreshToken&isNewUser
+  end
+
+  rect rgb(245,245,245)
+    Note over FE,BE: Option B) Frontend-Driven Token API (SPA/앱 친화)
+    FE->>BE: POST /api/v1/auth/oauth/{provider} (accessToken/idToken)
+    BE->>PG: 사용자 조회/프로비저닝
+    BE-->>FE: 200 { accessToken, refreshToken, isNewUser }
+  end
+
+  Note over FE: 토큰 저장 후 /api/v1/auth/me 조회
+  FE->>BE: GET /api/v1/auth/me (Authorization: Bearer)
+  BE->>PG: users 조회 (birth_date/saju_element 포함)
+  BE-->>FE: 200 AuthResponse
+
+  alt 온보딩 미완료 (birthDate 또는 sajuElement 없음)
+    FE->>BE: POST /api/v1/user/onboarding (idempotent)
+    BE->>PG: users 사주 관련 컬럼 갱신
+    BE-->>FE: 200 OnboardingResponse
+  else 온보딩 완료
+    FE-->>FE: 대시보드/거래/상점 등 메인 진입
+  end
+```
+
+### 2) 거래 실행 (외부 시세 조회는 트랜잭션 밖, DB 갱신은 락 기반 트랜잭션)
+
+#### 2.1 매수 주문
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant FE as Frontend
+  participant C as TradeController
+  participant TS as TradeService
+  participant SS as StockService
+  participant WR as WalletRepository
+  participant PR as PortfolioRepository
+  participant TLR as TradeLogRepository
+
+  FE->>C: POST /api/v1/trade/order (BUY)
+  C->>TS: executeOrder(userId, req)
+
+  Note over TS,SS: 외부 시세 조회는 트랜잭션 외부
+  TS->>SS: getQuote(ticker)
+  SS-->>TS: currentPrice
+
+  Note over TS: @Transactional 시작 (락 기반)
+  TS->>WR: findByUserIdWithLock(userId)
+  WR-->>TS: Wallet (PESSIMISTIC_WRITE)
+
+  alt 잔고 부족
+    TS-->>C: 400 TRADE_001
+    C-->>FE: ErrorResponse
+  else 잔고 충분
+    TS->>PR: findByUserIdAndTickerWithLock(userId, ticker)
+    PR-->>TS: Portfolio (또는 없음, PESSIMISTIC_WRITE)
+
+    TS->>TLR: save(TradeLog)
+    TS->>WR: save(Wallet)
+    TS->>PR: save(Portfolio)
+
+    TS-->>C: TradeResponse
+    C-->>FE: 200 TradeResponse
+  end
+```
+
+#### 2.2 매도 주문
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant FE as Frontend
+  participant C as TradeController
+  participant TS as TradeService
+  participant SS as StockService
+  participant WR as WalletRepository
+  participant PR as PortfolioRepository
+  participant TLR as TradeLogRepository
+
+  FE->>C: POST /api/v1/trade/order (SELL)
+  C->>TS: executeOrder(userId, req)
+
+  Note over TS,SS: 외부 시세 조회는 트랜잭션 외부
+  TS->>SS: getQuote(ticker)
+  SS-->>TS: currentPrice
+
+  Note over TS: @Transactional 시작 (락 기반)
+  TS->>WR: findByUserIdWithLock(userId)
+  WR-->>TS: Wallet (PESSIMISTIC_WRITE)
+
+  TS->>PR: findByUserIdAndTickerWithLock(userId, ticker)
+  PR-->>TS: Portfolio (PESSIMISTIC_WRITE)
+
+  alt 보유 수량 부족
+    TS-->>C: 400 TRADE_002
+    C-->>FE: ErrorResponse
+  else 매도 가능
+    TS->>TLR: save(TradeLog with realizedPnl)
+    TS->>WR: save(Wallet)
+    TS->>PR: save(Portfolio) 또는 delete(0 수량)
+
+    TS-->>C: TradeResponse
+    C-->>FE: 200 TradeResponse
+  end
+```
+
+### 3) 실시간 시세 브로드캐스트 (Finnhub WS → Redis 최신가 → STOMP)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant FH as Finnhub WebSocket
+  participant BE as Backend (Spring)
+  participant RD as Redis
+  participant ST as STOMP Broker
+  participant FE as Frontend (STOMP Client)
+
+  FH-->>BE: trade message (data[])
+  BE->>BE: Parse & Normalize
+  BE->>RD: SET stock:price:{ticker} (TTL 24h)
+  BE->>ST: SEND /topic/stock.ticker.{ticker}
+  ST-->>FE: MESSAGE (latest price payload)
+```
+
+### 4) Market API 캐싱 (Redis HIT/MISS/STALE)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant FE as Frontend
+  participant BE as Backend (MarketService)
+  participant RD as Redis
+  participant FH as Finnhub REST
+
+  FE->>BE: GET /api/v1/market/indices
+  BE->>RD: GET market:indices
+
+  alt Cache HIT
+    RD-->>BE: cached
+    BE-->>FE: 200 (X-Cache-Status: HIT)
+  else Cache MISS
+    RD-->>BE: null
+    BE->>FH: REST call
+    alt API Success
+      FH-->>BE: fresh data
+      BE->>RD: SET market:indices (TTL 60s)
+      BE->>RD: SET market:indices:stale (TTL 1h)
+      BE-->>FE: 200 (X-Cache-Status: MISS)
+    else API Failure
+      BE->>RD: GET market:indices:stale
+      alt Stale Exists
+        RD-->>BE: stale data
+        BE-->>FE: 200 (X-Cache-Status: STALE)
+      else No Stale
+        RD-->>BE: null
+        BE-->>FE: 5xx ErrorResponse
+      end
+    end
+  end
+```
+
+### 5) Calc/환율 (Exchange Rates + Calculator)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant FE as Frontend
+  participant BE as Backend (Calc/FX)
+  participant PG as PostgreSQL
+  participant EXIM as EximBank OpenAPI
+
+  Note over FE,BE: 환율 조회 (DB 우선, 필요 시 수집/적재)
+  FE->>BE: GET /api/v1/exchange-rates?date=yyyy-MM-dd
+  BE->>PG: SELECT exchange_rates WHERE as_of_date = date
+  alt DB Hit
+    PG-->>BE: items[]
+    BE-->>FE: 200 { asOf, items }
+  else DB Miss
+    PG-->>BE: empty
+    BE->>EXIM: OpenAPI(AP01) call
+    EXIM-->>BE: raw fx list
+    BE->>PG: UPSERT exchange_rates (as_of_date, cur_unit)
+    BE-->>FE: 200 { asOf, items }
+  end
+
+  Note over FE,BE: 배당/세금 계산 (1차 버전: USD 기준, currency=null)
+  FE->>BE: GET /api/v1/calc/dividend?assumedDividendYield&taxRate
+  BE->>PG: SELECT wallet.total_assets (USD)
+  BE-->>FE: 200 { totalDividend, withholdingTax, netDividend, currency:null }
 ```
 
 ---
@@ -53,15 +281,78 @@ flowchart TB
 
 ```mermaid
 erDiagram
-    Users ||--|| Wallet : has
-    Users ||--o{ Portfolio : owns
-    Users ||--o{ TradeLogs : executes
-    Users ||--o{ Inventory : has
-    Inventory }|--|| Items : contains
-    Users ||--o{ Watchlist : monitors
-    Users ||--o{ ChatHistory : chats
-    Users ||--o{ Notifications : receives
-    Users ||--o{ ExchangeRates : references
+    Users {
+        BIGINT user_id PK
+        VARCHAR email UNIQUE
+        VARCHAR password
+        VARCHAR provider
+        VARCHAR nickname
+        DATE    birth_date
+        TIME    birth_time
+        VARCHAR gender
+        VARCHAR calendar_type
+        VARCHAR saju_element
+        VARCHAR zodiac_sign
+        BOOLEAN is_public
+        BOOLEAN is_ranking_joined
+    }
+
+    Wallet {
+        BIGINT user_id PK, FK
+        NUMERIC cash_balance
+        NUMERIC total_assets
+        NUMERIC realized_profit
+        NUMERIC game_coin
+    }
+
+    Portfolio {
+        BIGINT user_id PK, FK
+        VARCHAR ticker  PK
+        NUMERIC quantity
+        NUMERIC avg_price
+    }
+
+    TradeLogs {
+        BIGINT log_id PK
+        BIGINT user_id FK
+        VARCHAR ticker
+        VARCHAR type
+        NUMERIC quantity
+        NUMERIC price
+        NUMERIC total_amount
+        NUMERIC realized_pnl
+        TIMESTAMP trade_date
+    }
+
+    Items {
+        BIGINT item_id PK
+        VARCHAR name
+        VARCHAR category
+        VARCHAR rarity
+        DOUBLE probability
+    }
+
+    Inventory {
+        BIGINT inventory_id PK
+        BIGINT user_id FK
+        BIGINT item_id FK
+        BOOLEAN equipped
+    }
+
+    ExchangeRates {
+        BIGINT id PK
+        DATE   as_of_date
+        VARCHAR cur_unit
+        VARCHAR cur_nm
+        NUMERIC deal_bas_r
+    }
+
+    Users ||--|| Wallet : "has"
+    Users ||--o{ Portfolio : "owns"
+    Users ||--o{ TradeLogs : "executes"
+    Users ||--o{ Inventory : "has"
+    Inventory }|--|| Items : "contains"
+    Users ||--o{ ExchangeRates : "references"
 ```
 
 - **users**
