@@ -1118,7 +1118,7 @@ MadCamp02는 유연한 연동을 위해 두 가지 인증 흐름을 모두 제�
 1.  **로그인 요청**: 프론트엔드에서 `GET {BACKEND_URL}/oauth2/authorization/kakao`로 리다이렉트.
 2.  **인증 처리**: 백엔드에서 소셜 인증 후 JWT 생성.
 3.  **토큰 전달**: 백엔드가 프론트엔드의 `/oauth/callback`으로 리다이렉트하며 Query Parameter로 토큰 전달. _(프론트 라우트 구현: Phase 1)_
-    - 예: `http://localhost:3000/oauth/callback?accessToken=...&isNewUser=true`
+    - 예: `http://madcampstock.duckdns.org/oauth/callback?accessToken=...&isNewUser=true`
 4.  **세션 저장**: 프론트엔드에서 토큰 추출 후 스토리지 저장 및 `auth-store` 업데이트.
 5.  **Kakao 동의 스코프**: `profile_nickname` **단일 필수**로 요청한다. `account_email`은 요청하지 않으며, Kakao 응답에 이메일이 없을 경우 백엔드가 `kakao-{timestamp}-{random}@auth.madcamp02.local` 형식의 임의 이메일을 생성해 중복 검사 후 가입시킨다.
 

@@ -234,7 +234,7 @@ src/
 - **상점/가챠 `/shop`(+`/gacha`)**: `gameApi.getItems/gacha/getInventory/equip`로 실데이터 연동. 카테고리 ENUM(`NAMEPLATE|AVATAR|THEME`)을 그대로 사용.
 - **랭킹 `/ranking`**: `gameApi.getRanking` 호출로 Top 리스트/내 랭킹 로딩. `user-store`의 `isRankingJoined` 상태와 연계.
 - **마이페이지 `/mypage`**: 프로필/인벤토리/지갑/랭킹 참여 토글 모두 `userApi`/`gameApi` 실 호출로 동작. 공개/랭킹참여 토글은 `userApi.updateProfile`을 통해 서버 반영.
-- **AI 도사 `/oracle`**: `lib/api/ai.ts`가 FastAPI(`http://localhost:8000`)에 POST 호출하여 응답을 받음. SSE 스트리밍은 아직 미구현.
+- **AI 도사 `/oracle`**: `lib/api/ai.ts`가 FastAPI(`http://madcampbackend.duckdns.org/`)에 POST 호출하여 응답을 받음. SSE 스트리밍은 아직 미구현.
 - **온보딩 `/onboarding`**: UI가 `nickname/birthDate/birthTime/gender/calendarType` 필드 모두 입력 받고 `userApi.submitOnboarding`(POST `/api/v1/user/onboarding`)을 호출. 응답의 `saju` 필드 기반 결과 표시(없으면 기본값). 마이페이지에서 동일 DTO를 사용해 재온보딩(사주 재계산)도 수행한다.
 - **계산기 `/calculator`**: 배당/세금 계산 폼을 표시하고, 사용자가 입력한 배당 수익률/주당 배당액/세율을 `calcApi.getDividend/getTax`를 통해 백엔드 Calc API와 연동한다. Currency는 현재 `null`로 내려오며, 화면에서는 USD 기준 값으로만 표시한다.
 - **인증**:
