@@ -189,9 +189,9 @@
     - `ONBOARDING_001`:
       - 입력값 유효성 에러 → 각 필드 옆에 메시지 표시 (`fieldErrors` 기반, 없으면 기본 안내)
     - `ONBOARDING_002`:
-      - 상단 경고: “음력/윤달 변환 중 문제가 발생했습니다. 달력 종류와 생년월일을 다시 확인해주세요.”
+      - 상단 경고: "음력/윤달 변환 중 문제가 발생했습니다. 달력 종류와 생년월일을 다시 확인해주세요."
     - `ONBOARDING_003`:
-      - 상단 경고: “일시적인 오류입니다. 잠시 후 다시 시도해주세요.”
+      - 상단 경고: "일시적인 오류입니다. 잠시 후 다시 시도해주세요."
 
 - 🧩 **백엔드 책임**
   - `POST /api/v1/user/onboarding` 에서 다음 에러 규약을 지킬 것:
@@ -207,7 +207,7 @@
 - ✅ **프론트 완료 (`app/(main)/mypage/page.tsx`)**
   - 사주 관련 입력:
     - `birthDate`, `birthTime`, `gender`, `calendarType`, 현재 사주/띠 표시
-  - “사주 다시 계산하기”:
+  - "사주 다시 계산하기":
     - `userApi.submitOnboarding({ nickname: profile.nickname, birthDate, birthTime?, gender, calendarType })`
     - 성공 후 `checkAuth()` 로 `/auth/me` 및 `user-store` 자동 동기화.
 
@@ -254,9 +254,9 @@
     - 예: `HIT · 12s · FRESH`
   - 상단 안내 배너:
     - 백엔드 캐시가 `STALE` 인 경우:
-      - “캐시된 데이터를 표시 중입니다. 최신 데이터를 불러오는 중입니다.”
+      - "캐시된 데이터를 표시 중입니다. 최신 데이터를 불러오는 중입니다."
     - 프론트 localStorage 캐시만 사용 중이고 백엔드 응답이 없는 경우:
-      - “로컬 캐시 데이터를 표시 중입니다. 서버 연결을 확인하는 중입니다.”
+      - "로컬 캐시 데이터를 표시 중입니다. 서버 연결을 확인하는 중입니다."
 
 - 🧩 **백엔드 책임**
   - 실제 캐시 시스템(Redis/DB) 상태와 헤더 값의 의미가 최대한 일치하도록 유지 (프론트는 단순 노출).
@@ -376,9 +376,87 @@ export const calcApi = {
      - `/api/v1/market/indices|news|movers` 의 DTO 와 캐시 헤더 3종(`X-Cache-Status`, `X-Cache-Age`, `X-Data-Freshness`) 유지.
   4. Calc:
      - `/api/v1/calc/dividend`, `/api/v1/calc/tax` 의 쿼리 파라미터/응답 스키마와 계산 규칙을 스펙과 일치하게 구현·보존.
+  5. 페르소나:
+     - `/api/v1/personas` 엔드포인트: 활성화된 페르소나 목록 반환
+     - `/api/v1/user/me` (PUT): `defaultPersona` 필드 처리
+     - `/api/v1/chat/ask` (POST): `persona` 필드 처리 및 AI Gateway 전달
 
-- 이 문서는 앞으로 **“백엔드가 맞춰야 할 프론트 계약 체크리스트”** 로만 사용하면 됩니다.
+---
+
+## 6. 페르소나 (Persona) API
+
+### 6.1 페르소나 목록 조회
+
+- ✅ **프론트 완료**
+  - `src/lib/api/user.ts` → `userApi.getPersonas()`
+  - `GET /api/v1/personas`
+  - Response: `Array<{ personaId: number; personaType: 'sage' | 'analyst' | 'friend'; name: string; description: string; isActive: boolean }>`
+  - `src/app/(main)/oracle/page.tsx`에서 초기 로드 시 호출하여 `chat-store`에 저장
+
+- 🧩 **백엔드 책임**
+  - `GET /api/v1/personas` 엔드포인트:
+    - 활성화된 페르소나 목록만 반환 (`is_active = true`)
+    - `persona_id`, `persona_type`, `name`, `description`, `is_active` 필드 포함
+
+### 6.2 기본 페르소나 설정
+
+- ✅ **프론트 완료**
+  - `src/lib/api/user.ts` → `userApi.setDefaultPersona(personaType)`
+  - `PUT /api/v1/user/me` with `{ defaultPersona: 'sage' | 'analyst' | 'friend' }`
+  - `src/app/(main)/oracle/page.tsx`에서 페르소나 변경 시 자동 호출
+
+- 🧩 **백엔드 책임**
+  - `PUT /api/v1/user/me`에서 `defaultPersona` 필드 처리
+  - `users.default_persona` 컬럼 업데이트
+  - 유효한 페르소나 타입 검증 (`'sage' | 'analyst' | 'friend'`)
+
+### 6.3 채팅 요청 시 페르소나 전달
+
+- ✅ **프론트 완료**
+  - `src/lib/api/ai.ts` → `sendMessageToAI(message, { persona, ... })`
+  - `POST /api/v1/chat/ask` 요청에 `persona` 필드 포함
+  - `src/stores/chat-store.ts`에서 `selectedPersona` 상태 관리
+  - `src/app/(main)/oracle/page.tsx`에서 페르소나 선택 UI 제공
+
+- 🧩 **백엔드 책임**
+  - `POST /api/v1/chat/ask`에서 `persona` 필드 처리:
+    - 요청에 `persona`가 있으면 사용
+    - 없으면 사용자의 `default_persona` 사용
+    - 없으면 기본값 `'sage'` 사용
+  - AI Gateway 호출 시 `persona` 파라미터 전달
+  - `chat_history` 저장 시 `persona_type` 필드 포함
+
+### 6.4 금융 데이터 통합
+
+- ✅ **프론트 완료**
+  - 질문에 종목 티커나 시장 관련 키워드가 포함되어도 프론트엔드에서는 별도 처리 불필요
+  - 백엔드가 질문을 분석하여 필요한 금융 데이터를 자동으로 로드
+
+- 🧩 **백엔드 책임**
+  - `ChatService.buildEnhancedContext()` 구현:
+    - 질문에서 종목 티커 감지 (`containsStockMention()`, `extractTickers()`)
+    - "시장", "지수" 키워드 감지 (`needsMarketData()`)
+    - "뉴스", "소식" 키워드 감지 (`needsNews()`)
+    - 필요한 금융 데이터를 동적으로 로드하여 컨텍스트에 추가
+  - AI Gateway로 전달하는 `context`에 금융 데이터 포함:
+    - `context.stocks`: 종목 가격 정보 배열
+    - `context.market`: 시장 지수 정보
+    - `context.news`: 시장 뉴스 정보
+  - 상세 설계: `docs/AI_FINANCIAL_DATA_INTEGRATION.md` 참조
+
+---
+
+- 이 문서는 앞으로 **"백엔드가 맞춰야 할 프론트 계약 체크리스트"** 로만 사용하면 됩니다.
   - 스펙 변경 시:
     1. 먼저 `FULL_SPECIFICATION.md` / `BACKEND_DEVELOPMENT_PLAN.md` 를 수정
     2. 그 후 이 파일의 🧩 항목들이 실제 구현과 어긋나지 않는지만 확인
 
+## 7. 관련 문서
+
+- **금융 데이터 통합**: `docs/AI_FINANCIAL_DATA_INTEGRATION.md` - 실제 금융 API 데이터를 활용한 대화 및 Fine-tuning
+- **ChatHistory 데이터 수집**: `docs/BACKEND_CHAT_HISTORY_API.md` - Fine-tuning용 실제 대화 데이터 수집 API
+- **페르소나 시스템 설계**: `docs/BACKEND_PERSONA_DESIGN.md` - 백엔드 페르소나 시스템 상세 설계
+- **AI 서버 명세**: `docs/AI_SERVER_SPEC.md` - AI 서버 전체 아키텍처 및 API 명세
+- **백엔드 개발 계획**: `docs/BACKEND_DEVELOPMENT_PLAN.md` - 백엔드 개발 계획 및 AI 연동 상세
+- **프론트엔드 개발 계획**: `docs/FRONTEND_DEVELOPMENT_PLAN.md` - 프론트엔드 개발 계획 및 `/oracle` 페이지 연동
+- **Fine-tuning 가이드**: `ai-server/fine-tuning/README.md` - LoRA Fine-tuning 전체 프로세스 가이드

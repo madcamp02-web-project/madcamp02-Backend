@@ -1,6 +1,6 @@
 # 🎨 MadCamp02: 프론트엔드 개발 계획서
 
-**Ver 2.7.21 - Frontend Development Blueprint (Spec-Driven Alignment)**
+**Ver 2.7.24 - Frontend Development Blueprint (Spec-Driven Alignment)**
 
 ---
 
@@ -32,6 +32,10 @@
 | **2.7.19** | **2026-01-21** | **계산기(`/calculator`) 페이지의 Calc API 연동(배당/세금 계산 1차 버전) 및 환율 조회 API(`/api/v1/exchange-rates`) 활용 계획, 다통화(currency) 확장 Future work를 문서에 반영.** | **MadCamp02** |
 | **2.7.21** | **2026-01-21** | **현재 프론트 구현/연동 완료 상태를 단일 Snapshot 섹션으로 정리하고, `FRONTEND_API_WIRING`과 본 계획서/통합 명세서 간 불일치 표현을 제거(“완료/미완료” 구분 고정).** | **MadCamp02** |
 | **2.7.22** | **2026-01-21** | **AI 도사(`/oracle`) 및 SSE 기반 AI 채팅 상세 스펙을 `docs/AI_SERVER_SPEC.md` v1.1.0으로 이전하고, 본 문서에는 `/oracle`·SSE 관련 내용을 요약+참조 형태로만 유지하도록 정리** | **MadCamp02** |
+| **2.7.23** | **2026-01-21** | **페르소나 시스템 및 금융 데이터 통합 반영: 페르소나 선택 UI, chat-store 확장, 금융 데이터 통합 기능 추가** | **MadCamp02** |
+| **2.7.24** | **2026-01-21** | **페르소나 시스템 및 금융 데이터 통합 최종 정합성 확인 및 문서 일관성 수정** | **MadCamp02** |
+| **2.7.23** | **2026-01-21** | **페르소나 시스템 및 금융 데이터 통합 반영: 페르소나 선택 UI, chat-store 확장, 금융 데이터 통합 기능 추가** | **MadCamp02** |
+| **2.7.24** | **2026-01-21** | **페르소나 시스템 및 금융 데이터 통합 최종 정합성 확인 및 문서 일관성 수정** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -530,7 +534,16 @@ interface TradeHistoryResponse {
   - Spring은 FastAPI AI Gateway(`/api/v1/ai/**`)로 프록시하여 LLM 응답을 스트리밍으로 전달한다.
 - **상세 스펙**:
   - SSE 이벤트 포맷, 프롬프트/페르소나, 모델 선택 규칙, `/oracle` UI와의 통합 흐름은  
-    **`docs/AI_SERVER_SPEC.md` v1.1.0의 3, 4, 6, 7장을 단일 진실로 사용**하며, 본 문서에서는 라우트/상태관리 관점의 요약만 유지한다.
+    **`docs/AI_SERVER_SPEC.md` v1.1.2의 3, 4, 6, 7장을 단일 진실로 사용**하며, 본 문서에서는 라우트/상태관리 관점의 요약만 유지한다.
+- **페르소나 선택 UI** (구현 완료):
+  - `src/app/(main)/oracle/page.tsx`: 헤더에 페르소나 선택 버튼 추가
+  - `src/stores/chat-store.ts`: `selectedPersona`, `availablePersonas` 상태 관리
+  - `src/lib/api/user.ts`: `getPersonas()`, `setDefaultPersona()` 함수 구현
+  - `src/lib/api/ai.ts`: `sendMessageToAI()`에 `persona` 파라미터 추가
+- **금융 데이터 통합** (백엔드 구현 필요):
+  - Spring Backend에서 질문 분석 후 필요한 금융 데이터를 동적으로 로드하여 컨텍스트에 포함
+  - AI Gateway가 금융 데이터를 프롬프트에 자동 포함하여 더 정확한 조언 제공
+  - 상세 설계: `docs/AI_FINANCIAL_DATA_INTEGRATION.md` 참조
 
 ### 5.9 계산기 (`/calculator`) 🆕
 
@@ -618,7 +631,7 @@ Zustand를 사용하여 전역 상태를 효율적으로 관리하고 컴포넌�
     프롬프트/모델 선택/응답 후처리는 모두 백엔드·AI 서버에서 담당한다.
 - **상세 프로토콜**:
   - SSE 이벤트 타입(`message/done/error`), `data` JSON 구조, 에러 코드 매핑 등은  
-    **`docs/AI_SERVER_SPEC.md` v1.1.0의 4, 6, 7장을 단일 진실로 사용**하고,  
+    **`docs/AI_SERVER_SPEC.md` v1.1.2의 4, 6, 7장을 단일 진실로 사용**하고,  
     본 문서에는 Axios/STOMP/SSE라는 **기술 스택 수준의 개요만 유지**한다.
 
 ---
@@ -782,11 +795,19 @@ flowchart TD
 
 ---
 
-**문서 버전:** 2.7.18 (온보딩/마이페이지 사주 재계산 플로우, `/user/onboarding` 재온보딩 연동 및 hasCompletedOnboarding 기반 필수 온보딩 플로우 반영)  
-**최종 수정일:** 2026-01-20
+**문서 버전:** 2.7.24 (페르소나 시스템 및 금융 데이터 통합 반영)  
+**최종 수정일:** 2026-01-21
 
-### 수정 요약 (2026-01-19)
+### 수정 요약 (2026-01-21)
 
-- 문서 헤더/체인지로그를 2.7.11로 정렬하고 Phase 5.5 체크리스트를 명시했습니다.
-- Shop/Gacha/Inventory/Ranking 실데이터 전환 및 DB 제약/`{items:[]}`/카테고리/ETF/STOMP 정합성 요구사항을 로드맵에 추가했습니다.
-- 중복된 버전 표기를 제거하고 현행 기준을 단일화했습니다.
+- 페르소나 시스템 및 금융 데이터 통합 관련 내용 추가
+- AI 도사(`/oracle`) 페이지에 금융 데이터 통합 기능 반영
+- 관련 문서 링크 추가
+
+## 관련 문서
+
+- **AI 서버 명세**: `docs/AI_SERVER_SPEC.md` - AI 서버 전체 아키텍처 및 API 명세
+- **금융 데이터 통합**: `docs/AI_FINANCIAL_DATA_INTEGRATION.md` - 실제 금융 API 데이터를 활용한 대화 및 Fine-tuning
+- **페르소나 시스템 설계**: `docs/BACKEND_PERSONA_DESIGN.md` - 백엔드 페르소나 시스템 상세 설계
+- **ChatHistory 데이터 수집**: `docs/BACKEND_CHAT_HISTORY_API.md` - Fine-tuning용 실제 대화 데이터 수집 API
+- **Fine-tuning 가이드**: `ai-server/fine-tuning/README.md` - LoRA Fine-tuning 전체 프로세스 가이드

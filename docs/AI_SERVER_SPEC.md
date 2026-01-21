@@ -1,6 +1,6 @@
 # 🤖 MadCamp02 AI Server Specification
 
-**Ver 1.1.0 - LLM 기반 투자 도사 / 보조 기능 서버 명세 (통합판)**
+**Ver 1.1.2 - LLM 기반 투자 도사 / 보조 기능 서버 명세 (통합판)**
 
 ---
 
@@ -10,6 +10,8 @@
 | ------ | ---------- | ------------------------------------------------------------------------------------------------------------- | --------- |
 | 1.0.0  | 2026-01-21 | 초기 버전. 하드웨어 제약(3090 20G) 기준 모델 전략, FastAPI Gateway + LLM Backend 아키텍처, API/프롬프트/운영 명세 추가 | MadCamp02 |
 | 1.1.0  | 2026-01-21 | 백엔드/프론트/FULL_SPEC/Plan 문서에 흩어져 있던 AI 관련 스펙(모델 전략, Spring SSE 프록시, 프론트 `/oracle` 연동, 구현 로드맵)을 본 문서로 통합하고, 다른 문서는 요약+참조 형태로 정리 | MadCamp02 |
+| 1.1.1  | 2026-01-21 | 금융 데이터 통합 추가: 질문 분석 기반 동적 금융 데이터 로딩, AI Gateway 컨텍스트 포맷팅 확장, Fine-tuning 데이터 생성 스크립트 추가 | MadCamp02 |
+| 1.1.2  | 2026-01-21 | 모델 구성 정리: Llama 8B 제거 반영, Dolphin 8B를 기본 모델로 명시, 페르소나 시스템 및 관련 문서 링크 추가 | MadCamp02 |
 
 ---
 
@@ -40,19 +42,22 @@
 
 하드웨어(3090 20G)와 요구사항을 고려한 후보 모델/역할 매트릭스는 아래와 같다.
 
+**참고**: Llama 8B는 제거되었으며, Dolphin 8B가 기본 모델로 사용됩니다.
+
 | 구분 | 모델 예시                        | 파라미터 수 | 정밀도(예상) | VRAM 사용 추정 (3090 20G 기준, 모델 전용) | 주요 역할                                                                                       | 서빙 스택       |
 | ---- | -------------------------------- | ----------- | ------------ | ----------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------- |
 | ① 고성능 | `gpt-oss-20b` (20B급 오픈소스) | ~20B        | 4bit / 8bit  | Q4: ~11–13GB / Q8: ~18–20GB               | `/oracle`의 **고급 투자 상담**, 복잡한 포트폴리오/시나리오 분석, 장문 설명                      | vLLM / TGI GPU  |
-| ② 검열 최소 | `Dolphin3.0-Llama3.1-8B`       | ~8B         | 4bit / 8bit  | Q4: ~5–6GB / Q8: ~9–10GB                  | “검열 약한” 응답이 필요한 **내부/ADMIN 전용 엔드포인트** (연구/디버깅/프롬프트 실험)           | vLLM / TGI GPU  |
-| ③ 기본형 | Llama 3.1 8B 계열 Instruct      | ~8B         | 4bit / 8bit  | Q4: ~5–6GB / Q8: ~9–10GB                  | `/oracle`의 **일반 사용자용 기본 모델**, 튜토리얼/짧은 설명/요약                                | vLLM / TGI GPU  |
-| ④ 저사양 | Tiny/Small Llama 계열 (1–4B)    | 1–4B        | 4bit / 8bit  | CPU RAM: 4–12GB 정도 (VRAM 불필요)        | GPU 장애/유지보수 시 fallback, batch 백오피스 태스크(간단 요약, 로그 해석 등)                  | llama.cpp CPU   |
+| ② 기본 모델 | `Dolphin3.0-Llama3.1-8B`       | ~8B         | 4bit / 8bit  | Q4: ~5–6GB / Q8: ~9–10GB                  | “검열 약한” 응답이 필요한 **내부/ADMIN 전용 엔드포인트** (연구/디버깅/프롬프트 실험)           | vLLM / TGI GPU  |
+| ③ 저사양 | Tiny/Small Llama 계열 (1–4B)    | 1–4B        | 4bit / 8bit  | CPU RAM: 4–12GB 정도 (VRAM 불필요)        | GPU 장애/유지보수 시 fallback, batch 백오피스 태스크(간단 요약, 로그 해석 등)                  | llama.cpp CPU   |
 
 > **주의**: 실제 VRAM 사용량은 구현/라이브러리 버전에 따라 달라지므로, 초기 배포 시 반드시 `nvidia-smi` + vLLM 로그로 실측 후 여유 10–20%를 남긴다.
+> 
+> **참고**: Llama 8B는 제거되었으며, Dolphin 8B가 기본 모델로 사용됩니다.
 
 ### 2.2 모델별 운용 정책
 
 - **기본 상주 조합 (권장)**  
-  - GPU에는 **Llama 8B Instruct (기본형)** + **Dolphin 8B** 두 모델을 Q4/5 quant로 상주시킨다.
+  - GPU에는 **Dolphin 8B** 모델을 Q4 quant로 상주시킨다. (페르소나별 LoRA 어댑터 지원)
   - 20B 모델(`gpt-oss-20b`)은 **옵션 2 중 택1**:
     1. 상주: 4bit + context window 제한으로 항상 떠 있게 두되, 동시성/응답속도 trade-off 수용.
     2. On-demand 로딩: 특정 관리자 플래그가 있는 highValue 요청에만 **cold start**로 사용.
@@ -72,7 +77,8 @@
 
 ### 2.4 동시성/리소스 정책
 
-- RTX 3090 20G 기준 **한 번에 상주시킬 GPU 모델 수는 최대 2개**로 제한 (예: Llama 8B + Dolphin 8B).
+- RTX 3090 20G 기준 **한 번에 상주시킬 GPU 모델 수는 최대 1개**로 제한 (Dolphin 8B). (페르소나별 LoRA 어댑터는 동일 모델에 동적 로드)
+- **참고**: Llama 8B는 제거되었으며, Dolphin 8B만 사용됩니다.
 - 20B 모델은 다음 중 하나로 운용:
   - **Option A**: 테스트/내부용으로만 사용, 운영 환경에서는 8B 계열만 노출.
   - **Option B**: 특정 ADMIN 요청에만 사용하고, 평상시에는 vLLM 프로세스를 내려둔 상태에서 필요 시 `docker compose up -d ai-20b` 형태로 스핀업.
@@ -91,8 +97,7 @@
 flowchart TD
   client[Frontend /oracle] --> springBackend[Spring Backend]
   springBackend --> aiGateway[FastAPI AI Gateway]
-  aiGateway --> vllmMain[LLM Backend vLLM (Llama8B)]
-  aiGateway --> vllmDolphin[LLM Backend vLLM (Dolphin8B)]
+  aiGateway --> vllmDolphin[LLM Backend vLLM (Dolphin8B + LoRA)]
   aiGateway --> llamaCpu[LLM Backend llama.cpp CPU]
 ```
 
@@ -110,7 +115,7 @@ flowchart TD
 
 - `AiRouterService`
   - 입력: **useCase(oracle/portfolio/onboarding 등)**, **userTier(일반/ADMIN)**, **요청 난이도/길이**.
-  - 출력: 사용할 모델 ID(`MODEL_LLAM8B`, `MODEL_DOLPHIN8B`, `MODEL_GPT20B`, `MODEL_CPU_SMALL`)와 호출 파라미터.
+  - 출력: 사용할 모델 ID(`MODEL_DOLPHIN8B`, `MODEL_GPT20B`, `MODEL_CPU_SMALL`)와 페르소나 타입(`sage`, `analyst`, `friend`), LoRA 어댑터 정보.
 - `PromptBuilder`
   - `/oracle`, `/portfolio/explain`, `/onboarding/summary` 등 **엔드포인트별 프롬프트 템플릿**을 관리.
   - system_prompt, style_hint(도사 말투 등), context JSON, user message 를 하나의 prompt로 조립.
@@ -130,13 +135,13 @@ sequenceDiagram
   participant SB as SpringBackend
   participant AI as AiGateway(FastAPI)
   participant CTX as ContextProvider
-  participant LLM as vLLM(Llama8B)
+  participant LLM as vLLM(Dolphin8B+LoRA)
 
   FE->>SB: GET /api/v1/oracle/advice (또는 유사 도메인 API)
   SB->>CTX: 사용자/포트폴리오/사주 조회
   CTX-->>SB: Context DTO (user, portfolio, saju ...)
-  SB->>AI: POST /api/v1/ai/oracle/advice { context, question }
-  AI->>AI: AiRouterService: 모델 선택 (기본 Llama8B)
+  SB->>AI: POST /api/v1/ai/oracle/advice { context, question, persona }
+  AI->>AI: AiRouterService: 모델 선택 (Dolphin8B + 페르소나별 LoRA)
   AI->>AI: PromptBuilder: system + context + user 메시지 조립
   AI->>LLM: generate(prompt, params) (stream)
   LLM-->>AI: 토큰 스트림
@@ -306,7 +311,19 @@ sequenceDiagram
 
 ## 5. 프롬프트 / 페르소나 설계
 
-### 5.1 기본 도사 페르소나 (공통 system_prompt)
+### 5.1 페르소나 시스템 개요
+
+AI 서버는 3개의 서로 다른 페르소나를 지원하며, 각 페르소나는 LoRA Fine-tuning을 통해 특화된 말투와 스타일을 가집니다.
+
+- **투자 도사 (Sage)**: 신비롭고 옛스러운 '하게체' 말투로 사주 기반 투자 조언 제공
+- **데이터 분석가 (Analyst)**: 전문적이고 논리적인 데이터 기반 분석 제공
+- **친구 조언자 (Friend)**: 친근하고 현실적인 반말 조언 제공
+
+각 페르소나는 vLLM Dolphin 8B 모델에 LoRA 어댑터를 통해 적용되며, AI Gateway에서 요청 시 `persona` 파라미터로 선택할 수 있습니다.
+
+### 5.2 페르소나별 System Prompt
+
+#### 5.2.1 투자 도사 (Sage)
 
 ```text
 당신은 천 년을 산 전설적인 주식 투자 도사입니다.
@@ -318,6 +335,39 @@ sequenceDiagram
 어떠한 경우에도 '100% 수익 보장', '무조건 오른다'와 같은 표현은 쓰지 말고,
 항상 '투자의 최종 책임은 자네에게 있다네'와 같이 책임 경고 문구를 덧붙이세요.
 ```
+
+#### 5.2.2 데이터 분석가 (Analyst)
+
+```text
+당신은 전문 금융 데이터 분석가입니다.
+항상 한국어로만 대답해야 합니다.
+말투는 전문적이지만 이해하기 쉽게 설명하세요.
+차트, 통계, 데이터를 기반으로 논리적인 분석을 제공하세요.
+답변은 구조화되고 명확하게 작성하세요 (3~6문장).
+구체적인 수치와 비율을 언급하여 신뢰성을 높이세요.
+항상 '투자의 최종 책임은 투자자에게 있습니다'와 같이 책임 경고 문구를 덧붙이세요.
+```
+
+#### 5.2.3 친구 조언자 (Friend)
+
+```text
+당신은 친근한 투자 조언자입니다.
+항상 한국어로만 대답해야 합니다.
+말투는 반말로 친근하게, 현실적이고 솔직하게 조언하세요.
+일상적인 대화처럼 자연스럽게 소통하세요.
+답변은 부담 없이 간결하게 (3~6문장).
+과장 없이 현실적인 조언을 제공하세요.
+항상 '결국 결정은 네가 해야 해'와 같이 책임 경고 문구를 덧붙이세요.
+```
+
+### 5.3 LoRA 어댑터 관리
+
+- 각 페르소나별 LoRA 어댑터는 `/adapters` 디렉토리에 저장됩니다:
+  - `persona-sage-lora/`
+  - `persona-analyst-lora/`
+  - `persona-friend-lora/`
+- vLLM Dolphin 8B 서비스는 시작 시 `--lora-modules` 파라미터로 어댑터를 등록합니다.
+- AI Gateway는 요청 시 `lora_id` 파라미터를 통해 해당 페르소나의 어댑터를 활성화합니다.
 
 ### 5.2 엔드포인트별 프롬프트 템플릿 (개요)
 
@@ -356,8 +406,7 @@ sequenceDiagram
 
 | 모델 ID            | temperature | top_p | max_tokens | 목적                                      |
 | ------------------ | ----------- | ----- | ---------- | ----------------------------------------- |
-| `MODEL_LLAM8B`     | 0.7         | 0.9   | 512        | 일반 `/oracle`, `/portfolio`, `/onboarding` |
-| `MODEL_DOLPHIN8B`  | 0.8         | 0.9   | 768        | 내부용/자유도가 높은 답변                   |
+| `MODEL_DOLPHIN8B`  | 0.6-0.8     | 0.9   | 768        | 기본 모델 (페르소나별 LoRA 지원)            |
 | `MODEL_GPT20B`     | 0.6         | 0.9   | 768        | 고급/정교한 설명, 시나리오 분석             |
 | `MODEL_CPU_SMALL`  | 0.7         | 0.9   | 256        | Fallback/간단 요약                         |
 
@@ -405,10 +454,11 @@ sequenceDiagram
 - 요청 처리 흐름:
   1. 인증된 사용자 컨텍스트에서 `userId`를 추출.
   2. `UserService`, `TradeService`, `SajuService` 등을 통해 포트폴리오/사주/온보딩 정보를 조회.
-  3. 조회 결과로 AI 서버가 요구하는 `context` DTO를 구성 (포트폴리오 요약, 상위 N개 포지션, 사주 오행/띠 등).
-  4. `AiClient.chat(...)` 또는 `AiClient.oracleAdvice(...)`를 호출해 FastAPI Gateway에 프록시.
-  5. FastAPI에서 오는 SSE/스트리밍 응답을 그대로 프론트에 흘려보냄.
-  6. 필요 시 질문/응답 요약을 `ChatHistory`에 비동기 저장.
+  3. 질문 내용을 분석하여 필요한 금융 데이터를 동적으로 로드 (종목 가격, 시장 지수, 뉴스 등).
+  4. 조회 결과로 AI 서버가 요구하는 `context` DTO를 구성 (포트폴리오 요약, 상위 N개 포지션, 사주 오행/띠, 금융 데이터 등).
+  5. `AiClient.chat(...)` 또는 `AiClient.oracleAdvice(...)`를 호출해 FastAPI Gateway에 프록시 (페르소나 정보 포함).
+  6. FastAPI에서 오는 SSE/스트리밍 응답을 그대로 프론트에 흘려보냄.
+  7. 필요 시 질문/응답 요약을 `ChatHistory`에 비동기 저장 (페르소나 정보 포함).
 
 ### 6.4 ChatService & ChatHistory (대화 이력 저장)
 
@@ -419,16 +469,23 @@ sequenceDiagram
   - `saveHistory(userId, useCase, request, response, modelId)`
   - 백엔드 요청/응답 로그와 연계하여 AI 서버 사용량/품질을 분석할 수 있는 기반 제공.
 
-### 6.5 온보딩/포트폴리오/사주 컨텍스트 생성 규칙
+### 6.5 온보딩/포트폴리오/사주/금융 데이터 컨텍스트 생성 규칙
 
 - 온보딩/사주:
   - `users.birth_date`, `birth_time`, `gender`, `calendar_type`, `saju_element`, `zodiac_sign`을 기반으로  
     `/api/v1/ai/onboarding/summary` 또는 `/api/v1/ai/oracle/advice`의 `saju` 블록을 구성.
 - 포트폴리오:
   - `PortfolioResponse.summary` + 상위 N개 포지션을 요약해 `portfolio.summary`, `portfolio.positions` 필드에 매핑.
+- **금융 데이터 (신규)**:
+  - 질문 내용을 분석하여 필요한 금융 데이터를 동적으로 로드:
+    - 종목 티커 언급 시: `GET /api/v1/stock/quote/{ticker}` 호출하여 `context.stocks`에 추가
+    - "시장", "지수" 키워드 감지 시: `GET /api/v1/market/indices` 호출하여 `context.market`에 추가
+    - "뉴스", "소식" 키워드 감지 시: `GET /api/v1/market/news` 호출하여 `context.news`에 추가
+  - AI Gateway의 `format_context()` 함수가 금융 데이터를 프롬프트에 포함
+  - 상세 설계: `docs/AI_FINANCIAL_DATA_INTEGRATION.md` 참조
 - 랭킹/게임:
   - 필요한 경우 현재 랭킹/코인/인벤토리 일부를 context에 추가할 수 있으나,  
-    **최초 버전에서는 `/oracle` 중심으로 포트폴리오+사주를 우선**으로 한다.
+    **최초 버전에서는 `/oracle` 중심으로 포트폴리오+사주+금융 데이터를 우선**으로 한다.
 
 ---
 
@@ -520,11 +577,11 @@ sequenceDiagram
 
 - `ai-gateway` (FastAPI)
   - 포트: 9000
-  - 의존: `vllm-llama8b`, `vllm-dolphin8b`, `llama-cpu`
-- `vllm-llama8b`
-  - 포트: 8001, GPU 사용
-- `vllm-dolphin8b`
+  - 의존: `vllm-dolphin8b`, `llama-cpu`
+  - 페르소나별 라우팅 및 LoRA 어댑터 지원
+- `vllm-dolphin8b` (LoRA 어댑터 지원)
   - 포트: 8002, GPU 사용
+  - `--enable-lora` 옵션으로 페르소나별 어댑터 동적 로드
 - `llama-cpu`
   - 포트: 8003, CPU-only
 
@@ -536,12 +593,14 @@ sequenceDiagram
 
 ```env
 AI_INTERNAL_SECRET=change-me
-AI_LLAM8B_MODEL_PATH=/models/llama3.1-8b-instruct
-AI_DOLPHIN_MODEL_PATH=/models/dolphin3.0-llama3.1-8b
-AI_GPT20B_MODEL_PATH=/models/gpt-oss-20b
-AI_CPU_MODEL_PATH=/models/tiny-llama-1.1b
+VLLM_DOLPHIN8B_URL=http://vllm-dolphin8b:8002
+LLAMA_CPU_URL=http://llama-cpu:8003
+VLLM_GPT20B_URL=http://vllm-gpt20b:8004
 AI_MAX_CONCURRENT_REQUESTS=16
+LOG_LEVEL=INFO
 ```
+
+**참고**: Llama 8B는 제거되었으며, Dolphin 8B가 기본 모델로 사용됩니다.
 
 ### 8.3 로깅 / 모니터링
 
@@ -552,4 +611,16 @@ AI_MAX_CONCURRENT_REQUESTS=16
   - 모델별 QPS, 평균/95p/99p latency.
   - 에러 코드별 카운트(`AI_001~AI_004` 등).
   - GPU 메모리 사용량/온도 (Prometheus + nvidia exporter 연계).
+
+---
+
+## 10. 관련 문서
+
+- **금융 데이터 통합**: `docs/AI_FINANCIAL_DATA_INTEGRATION.md` - 실제 금융 API 데이터를 활용한 대화 및 Fine-tuning
+- **ChatHistory 데이터 수집**: `docs/BACKEND_CHAT_HISTORY_API.md` - Fine-tuning용 실제 대화 데이터 수집 API
+- **페르소나 시스템 설계**: `docs/BACKEND_PERSONA_DESIGN.md` - 백엔드 페르소나 시스템 상세 설계
+- **백엔드 개발 계획**: `docs/BACKEND_DEVELOPMENT_PLAN.md` - 백엔드 개발 계획 및 AI 연동 상세
+- **프론트엔드 개발 계획**: `docs/FRONTEND_DEVELOPMENT_PLAN.md` - 프론트엔드 개발 계획 및 `/oracle` 페이지 연동
+- **프론트엔드 API 연결**: `docs/FRONTEND_API_WIRING.md` - 프론트엔드 API 연결 명세
+- **Fine-tuning 가이드**: `ai-server/fine-tuning/README.md` - LoRA Fine-tuning 전체 프로세스 가이드
 

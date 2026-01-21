@@ -1,6 +1,6 @@
 # ⚙️ MadCamp02: 백엔드 개발 계획서
 
-**Ver 2.7.21 - Backend Development Blueprint (Spec-Driven Alignment)**
+**Ver 2.7.24 - Backend Development Blueprint (Spec-Driven Alignment)**
 
 ---
 
@@ -39,6 +39,8 @@
 | **2.7.20** | **2026-01-21** | **`GET /api/v1/auth/me` 응답에 `birthDate` 필드를 포함하도록 `AuthResponse`·`AuthController.me`·`AuthService`를 정리하고, `User.hasCompletedOnboarding()` 기준(`birthDate + sajuElement`)에 맞춰 온보딩 강제 플로우(백엔드/프론트 `hasCompletedOnboarding(user)`/AuthGuard)가 실제 구현과 정합하게 동작함을 확인. 개발/테스트 계정 더미 데이터(`V7__insert_test_data.sql`)의 비밀번호를 공통 값(평문 `Password123!`)으로 통일하고 주석으로 명시하여 로그인 시나리오를 문서화.** | **MadCamp02** |
 | **2.7.21** | **2026-01-21** | **프론트 연동 문서(`FRONTEND_API_WIRING`)와 3대 스펙 문서(Backend/Frontend Plan, Full Spec)의 “현재까지 완료된 구현/연동”을 단일 요약 섹션으로 통합 정리(계약/현황/미완료 항목 분리).** | **MadCamp02** |
 | **2.7.22** | **2026-01-21** | **AI 관련 상세 스펙(모델 전략, FastAPI AI Gateway, Spring SSE 프록시, `/oracle` 연동)은 `docs/AI_SERVER_SPEC.md` 1.1.0으로 이전하고, 본 문서에는 AI 연동을 요약+참조 형태로만 유지하도록 정리** | **MadCamp02** |
+| **2.7.23** | **2026-01-21** | **페르소나 시스템 및 금융 데이터 통합 반영: DB 스키마(V9), AI Gateway 페르소나 라우팅, 프론트엔드 페르소나 선택 UI, 금융 데이터 동적 로딩 설계 추가** | **MadCamp02** |
+| **2.7.24** | **2026-01-21** | **페르소나 시스템 및 금융 데이터 통합 최종 정합성 확인 및 문서 일관성 수정** | **MadCamp02** |
 
 ### Ver 2.6 주요 변경 사항
 
@@ -140,7 +142,7 @@
 
 ### 7) 미완료/후속
 
-- **AI(SSE) 연동**: `POST /api/v1/chat/ask`의 SSE 프록시/저장/스트리밍 UX는 계획 대비 미완(프론트는 HTTP 호출 기반, SSE는 후속)
+- **AI(SSE) 연동**: `POST /api/v1/chat/ask`의 SSE 프록시/저장/스트리밍 UX는 계획 대비 미완(프론트는 HTTP 호출 기반, SSE는 후속). 페르소나 시스템 스키마 및 AI Gateway 라우팅은 완료.
 - **관리자 기능/확장 전략**: Market Movers 관리자/다중 Historical Provider 등은 Phase 8~9로 유지
 
 ---
@@ -498,7 +500,7 @@ MadCamp02는 다양한 클라이언트 환경(Web, Mobile, External)을 지원�
 - **상세 스펙**
   - 모델 전략(8B/20B/CPU Fallback), 프롬프트/페르소나, AI 서버 API(`/api/v1/ai/chat|oracle/advice|portfolio/explain|onboarding/summary`),  
     Spring SSE 프록시 및 프론트 `/oracle` 클라이언트까지의 전체 흐름은  
-    **`docs/AI_SERVER_SPEC.md` v1.1.0**의 2~7장과 9장을 단일 진실로 사용한다.
+    **`docs/AI_SERVER_SPEC.md` v1.1.2**의 2~7장과 9장을 단일 진실로 사용한다.
 
 ---
 
@@ -1072,16 +1074,30 @@ sequenceDiagram
 - Phase 9.2: 스케줄러 구현 및 외부 API 연동
 - Phase 9.3: 자동 갱신 로직 및 에러 처리
 
-### 12.11 Phase 10: AI(SSE) 연동 (프론트 `/oracle`)
+### 12.11 Phase 10: AI(SSE) 연동 및 페르소나 시스템 (프론트 `/oracle`)
 
-- **목표**: 프론트 `/oracle` 페이지가 Spring 백엔드의 `POST /api/v1/chat/ask` 엔드포인트를 통해 FastAPI AI Gateway와 SSE로 안전하게 연동되도록 한다.
+- **목표**: 프론트 `/oracle` 페이지가 Spring 백엔드의 `POST /api/v1/chat/ask` 엔드포인트를 통해 FastAPI AI Gateway와 SSE로 안전하게 연동되도록 하고, 페르소나 시스템을 지원한다.
 - **구현 개요**:
   - `AiClient`: FastAPI AI Gateway의 `/api/v1/ai/chat` 등을 호출하는 전용 HTTP 클라이언트.
-  - `ChatController`: `POST /api/v1/chat/ask`에서 SSE(`text/event-stream`)로 프론트에 스트리밍 응답을 전달.
-  - `ChatService`/`ChatHistory`: 질문·응답·사용 모델을 요약 형태로 저장해 로그/분석에 활용.
+  - `ChatController`: `POST /api/v1/chat/ask`에서 SSE(`text/event-stream`)로 프론트에 스트리밍 응답을 전달. 페르소나 파라미터 처리.
+  - `ChatService`/`ChatHistory`: 질문·응답·사용 모델·페르소나 정보를 요약 형태로 저장해 로그/분석에 활용.
+  - `PersonaService`/`PersonaController`: 페르소나 목록 조회, 사용자 기본 페르소나 설정 관리.
+- **페르소나 시스템**:
+  - DB 스키마: Flyway V9 마이그레이션 완료 (`personas` 테이블, `users.default_persona`, `chat_history.persona_type`)
+  - 3개 페르소나: 투자 도사(Sage), 데이터 분석가(Analyst), 친구 조언자(Friend)
+  - AI Gateway: 페르소나별 LoRA 어댑터 지원 및 라우팅 구현 완료
+  - 프론트엔드: 페르소나 선택 UI 및 API 클라이언트 구현 완료
+  - 백엔드 구현 필요: `PersonaService`, `PersonaController`, `ChatController` 페르소나 파라미터 처리
+- **금융 데이터 통합**:
+  - 질문 분석 및 동적 데이터 로딩: `ChatService.buildEnhancedContext()` 구현 필요
+  - 금융 API 연동: `MarketService`, `StockService`를 활용한 컨텍스트 구성
+  - AI Gateway 컨텍스트 포맷팅: 금융 데이터를 프롬프트에 포함하는 로직 구현 완료
+  - Fine-tuning 데이터 생성: 실제 금융 API 데이터를 사용한 대화 생성 스크립트 제공
+  - 상세 설계: `docs/AI_FINANCIAL_DATA_INTEGRATION.md`, `docs/BACKEND_PERSONA_DESIGN.md` 참조
 - **상세 스펙**:
   - SSE 포맷, 이벤트 타입(`message/done/error`), 에러 코드 매핑, 모델 라우팅/프롬프트 구성 등은  
-    **`docs/AI_SERVER_SPEC.md` v1.1.0의 3, 4, 6, 7, 9장을 단일 진실로 따른다.**
+    **`docs/AI_SERVER_SPEC.md` v1.1.2의 3, 4, 6, 7, 9장을 단일 진실로 따른다.**
+  - 페르소나 시스템 상세 설계는 **`docs/BACKEND_PERSONA_DESIGN.md`** 참조.
 
 ---
 
@@ -1207,3 +1223,13 @@ sequenceDiagram
 - 응답 스키마는 `FULL_SPECIFICATION` 5.5와 정합
 
 ---
+
+## 관련 문서
+
+- **AI 서버 명세**: `docs/AI_SERVER_SPEC.md` - AI 서버 전체 아키텍처 및 API 명세
+- **금융 데이터 통합**: `docs/AI_FINANCIAL_DATA_INTEGRATION.md` - 실제 금융 API 데이터를 활용한 대화 및 Fine-tuning
+- **페르소나 시스템 설계**: `docs/BACKEND_PERSONA_DESIGN.md` - 백엔드 페르소나 시스템 상세 설계
+- **ChatHistory 데이터 수집**: `docs/BACKEND_CHAT_HISTORY_API.md` - Fine-tuning용 실제 대화 데이터 수집 API
+- **프론트엔드 개발 계획**: `docs/FRONTEND_DEVELOPMENT_PLAN.md` - 프론트엔드 개발 계획 및 `/oracle` 페이지 연동
+- **프론트엔드 API 연결**: `docs/FRONTEND_API_WIRING.md` - 프론트엔드 API 연결 명세
+- **Fine-tuning 가이드**: `ai-server/fine-tuning/README.md` - LoRA Fine-tuning 전체 프로세스 가이드
