@@ -33,7 +33,11 @@ Finnhub 실시간 시세 + 모의투자(거래/포트폴리오) + 게이미피�
 ```mermaid
 flowchart TB
   FE[Frontend<br/>Next.js + STOMP.js] -->|HTTPS| BE[Backend<br/>Spring Boot]
+<<<<<<< HEAD
   FE -->|WSS (STOMP) /ws-stomp| BE
+=======
+  FE -->|"WSS (STOMP) /ws-stomp"| BE
+>>>>>>> 3308f732f5d21fee51c0a24c7d9d0939a3317698
 
   BE -->|JPA| PG[(PostgreSQL)]
   BE -->|Cache| RD[(Redis)]
