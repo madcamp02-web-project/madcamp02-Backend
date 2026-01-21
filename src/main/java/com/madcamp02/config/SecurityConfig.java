@@ -236,11 +236,17 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // 허용할 Origin
-        configuration.setAllowedOrigins(Arrays.asList(
-                "http://localhost:3000",
-                "https://madcamp02.com"));
-        // setAllowedOrigins: 허용할 사이트 주소. (localhost:3000 등 개발/운영 주소)
+        // 허용할 Origin (패턴 기반)
+        // - 실제 서비스 도메인: madcampstock.duckdns.org, madcamp02.com
+        // - 로컬 개발 환경: localhost / 127.0.0.1 전 포트 허용
+        configuration.setAllowedOriginPatterns(Arrays.asList(
+                "http://madcampstock.duckdns.org",
+                "https://madcampstock.duckdns.org",
+                "https://madcamp02.com",
+                "http://localhost:*",
+                "http://127.0.0.1:*"
+        ));
+        // setAllowedOriginPatterns: 와일드카드 포트까지 포함한 Origin 패턴 허용
 
         // 허용할 HTTP 메서드
         configuration.setAllowedMethods(Arrays.asList(

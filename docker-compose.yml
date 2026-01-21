@@ -61,7 +61,7 @@ services:
       KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID}
       KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET}
       # OAuth2 로그인 성공 후 프론트엔드로 리다이렉트할 URI
-      OAUTH2_REDIRECT_URI: ${OAUTH2_REDIRECT_URI:-http://localhost:3000/oauth/callback}
+      OAUTH2_REDIRECT_URI: ${OAUTH2_REDIRECT_URI:-http://madcampstock.duckdns.org/oauth/callback}
       # ========== 외부 API ==========
       FINNHUB_API_KEY: ${FINNHUB_API_KEY}
       EODHD_API_KEY: ${EODHD_API_KEY:-}

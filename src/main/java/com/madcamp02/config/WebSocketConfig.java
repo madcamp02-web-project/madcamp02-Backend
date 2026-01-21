@@ -25,9 +25,16 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws-stomp")
+                // CORS/WebSocket Origin 허용 목록
+                // - 도메인 운영 환경: http/https 둘 다 허용
+                // - 로컬 개발 환경: localhost / 127.0.0.1 전 포트 허용
+                //   (Docker로 백엔드만 띄우고, 프론트는 로컬에서 돌릴 때 필요)
                 .setAllowedOriginPatterns(
-                        "http://localhost:3000"
-                        //아직은 개발단계라 이거 안채워두긴 하는데 여기에 내 도메인 추가 무조건 해줘야 함!
+                        "http://madcampstock.duckdns.org",
+                        "https://madcampstock.duckdns.org",
+                        "http://madcampbackend.duckdns.org",
+                        "http://localhost:*",
+                        "http://127.0.0.1:*"
                 )
                 // 어려운 말: 프론트 환경에 따라 SockJS fallback이 필요할 수 있어 기본 활성화
                 // 모든 환경이 웹소켓을 지원하지는 않기 때문에 .withSockJS()을 사용해서 총 3가지 통신을 시도함
