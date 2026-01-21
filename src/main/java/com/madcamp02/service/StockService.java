@@ -70,12 +70,32 @@ public class StockService {
                 // 없으면 계산
                 Double change = quote.getChange();
                 Double changePercent = quote.getChangePercent();
-                
+
                 if (change == null && quote.getCurrentPrice() != null && quote.getPreviousClose() != null) {
                         change = quote.getCurrentPrice() - quote.getPreviousClose();
                 }
-                if (changePercent == null && quote.getPreviousClose() != null && quote.getPreviousClose() != 0 && change != null) {
+                if (changePercent == null && quote.getPreviousClose() != null && quote.getPreviousClose() != 0
+                                && change != null) {
                         changePercent = (change / quote.getPreviousClose()) * 100;
+                }
+
+                // 거래량 조회 (로컬 DB에서 - EODHD API 일일 한도 초과 대응)
+                Long volume = 0L;
+                try {
+                        // DB에서 해당 티커의 가장 최근 일봉 데이터 조회
+                        List<StockCandle> recentCandles = stockCandleRepository
+                                        .findBySymbolAndPeriodOrderByDateDesc(ticker, "d");
+                        if (recentCandles != null && !recentCandles.isEmpty()) {
+                                StockCandle latestCandle = recentCandles.get(0);
+                                volume = latestCandle.getVolume() != null ? latestCandle.getVolume() : 0L;
+                                log.debug("Quote 거래량 조회 성공 (DB): ticker={}, volume={}, date={}", ticker, volume,
+                                                latestCandle.getDate());
+                        } else {
+                                log.debug("Quote 거래량 조회: DB에 캔들 데이터 없음 (ticker={})", ticker);
+                        }
+                } catch (Exception e) {
+                        log.debug("Quote 거래량 조회 실패 (무시): ticker={}, error={}", ticker, e.getMessage());
+                        // 거래량 조회 실패해도 계속 진행 (0으로 유지)
                 }
 
                 return StockQuoteResponse.builder()
@@ -87,6 +107,7 @@ public class StockService {
                                 .previousClose(quote.getPreviousClose())
                                 .change(change != null ? change : 0.0)
                                 .changePercent(changePercent != null ? changePercent : 0.0)
+                                .volume(volume)
                                 .build();
         }
 
@@ -124,9 +145,9 @@ public class StockService {
          * DB에 해당 종목의 데이터가 없을 때 d, w, m 모든 resolution을 한번에 가져와서 저장
          * API 호출은 1회만 카운트 (3개 resolution을 한번에 처리)
          * 
-         * @param ticker 종목 심볼
+         * @param ticker   종목 심볼
          * @param fromDate 시작 날짜
-         * @param toDate 종료 날짜
+         * @param toDate   종료 날짜
          * @return 배치 로드 성공 여부
          */
         private boolean batchLoadAllResolutions(String ticker, LocalDate fromDate, LocalDate toDate) {
@@ -137,9 +158,9 @@ public class StockService {
                 }
 
                 log.info("배치 로드 시작: {} 종목의 d, w, m 모든 resolution 데이터 가져오기", ticker);
-                
+
                 String order = "a"; // 오름차순
-                String[] periods = {"d", "w", "m"};
+                String[] periods = { "d", "w", "m" };
                 int successCount = 0;
 
                 // Quota 체크 (배치 로드 전에 한번만 체크)
@@ -162,21 +183,30 @@ public class StockService {
                                                                         .date(c.getDate())
                                                                         .period(period)
                                                                         .open(BigDecimal.valueOf(
-                                                                                        c.getOpen() != null ? c.getOpen() : 0.0))
+                                                                                        c.getOpen() != null
+                                                                                                        ? c.getOpen()
+                                                                                                        : 0.0))
                                                                         .high(BigDecimal.valueOf(
-                                                                                        c.getHigh() != null ? c.getHigh() : 0.0))
+                                                                                        c.getHigh() != null
+                                                                                                        ? c.getHigh()
+                                                                                                        : 0.0))
                                                                         .low(BigDecimal.valueOf(
-                                                                                        c.getLow() != null ? c.getLow() : 0.0))
+                                                                                        c.getLow() != null ? c.getLow()
+                                                                                                        : 0.0))
                                                                         .close(BigDecimal.valueOf(
-                                                                                        c.getClose() != null ? c.getClose() : 0.0))
-                                                                        .volume(c.getVolume() != null ? c.getVolume() : 0L)
+                                                                                        c.getClose() != null
+                                                                                                        ? c.getClose()
+                                                                                                        : 0.0))
+                                                                        .volume(c.getVolume() != null ? c.getVolume()
+                                                                                        : 0L)
                                                                         .build())
                                                         .collect(Collectors.toList());
 
                                         if (!newCandles.isEmpty()) {
                                                 stockCandleRepository.saveAll(newCandles);
                                                 successCount++;
-                                                log.info("배치 로드 성공: {} period={}, count={}", ticker, period, newCandles.size());
+                                                log.info("배치 로드 성공: {} period={}, count={}", ticker, period,
+                                                                newCandles.size());
                                         }
                                 } else {
                                         log.warn("배치 로드: {} period={} 데이터 없음", ticker, period);
@@ -201,9 +231,9 @@ public class StockService {
          * 부분 배치 로드: d는 있지만 w, m 중 없는 resolution들을 한번에 가져오기
          * API 호출은 1회만 카운트 (여러 resolution을 한번에 처리)
          * 
-         * @param ticker 종목 심볼
+         * @param ticker   종목 심볼
          * @param fromDate 시작 날짜
-         * @param toDate 종료 날짜
+         * @param toDate   종료 날짜
          * @return 배치 로드 성공 여부
          */
         private boolean batchLoadMissingResolutions(String ticker, LocalDate fromDate, LocalDate toDate) {
@@ -256,21 +286,30 @@ public class StockService {
                                                                         .date(c.getDate())
                                                                         .period(period)
                                                                         .open(BigDecimal.valueOf(
-                                                                                        c.getOpen() != null ? c.getOpen() : 0.0))
+                                                                                        c.getOpen() != null
+                                                                                                        ? c.getOpen()
+                                                                                                        : 0.0))
                                                                         .high(BigDecimal.valueOf(
-                                                                                        c.getHigh() != null ? c.getHigh() : 0.0))
+                                                                                        c.getHigh() != null
+                                                                                                        ? c.getHigh()
+                                                                                                        : 0.0))
                                                                         .low(BigDecimal.valueOf(
-                                                                                        c.getLow() != null ? c.getLow() : 0.0))
+                                                                                        c.getLow() != null ? c.getLow()
+                                                                                                        : 0.0))
                                                                         .close(BigDecimal.valueOf(
-                                                                                        c.getClose() != null ? c.getClose() : 0.0))
-                                                                        .volume(c.getVolume() != null ? c.getVolume() : 0L)
+                                                                                        c.getClose() != null
+                                                                                                        ? c.getClose()
+                                                                                                        : 0.0))
+                                                                        .volume(c.getVolume() != null ? c.getVolume()
+                                                                                        : 0L)
                                                                         .build())
                                                         .collect(Collectors.toList());
 
                                         if (!newCandles.isEmpty()) {
                                                 stockCandleRepository.saveAll(newCandles);
                                                 successCount++;
-                                                log.info("부분 배치 로드 성공: {} period={}, count={}", ticker, period, newCandles.size());
+                                                log.info("부분 배치 로드 성공: {} period={}, count={}", ticker, period,
+                                                                newCandles.size());
                                         }
                                 } else {
                                         log.warn("부분 배치 로드: {} period={} 데이터 없음", ticker, period);
@@ -283,7 +322,8 @@ public class StockService {
                 // 부분 배치 로드가 하나라도 성공했으면 Quota 1회만 카운트
                 if (successCount > 0) {
                         quotaManager.incrementUsage("EODHD");
-                        log.info("부분 배치 로드 완료: {} 종목, 성공한 resolution={}/{}, Quota 1회 카운트", ticker, successCount, missingPeriods.size());
+                        log.info("부분 배치 로드 완료: {} 종목, 성공한 resolution={}/{}, Quota 1회 카운트", ticker, successCount,
+                                        missingPeriods.size());
                 } else {
                         log.warn("부분 배치 로드 실패: {} 종목의 모든 누락된 resolution 실패", ticker);
                 }
@@ -294,10 +334,10 @@ public class StockService {
         /**
          * 개별 resolution 보완: 요청된 resolution만 개별적으로 가져오기
          * 
-         * @param ticker 종목 심볼
-         * @param period resolution (d, w, m)
+         * @param ticker   종목 심볼
+         * @param period   resolution (d, w, m)
          * @param fromDate 시작 날짜
-         * @param toDate 종료 날짜
+         * @param toDate   종료 날짜
          * @return 로드 성공 여부
          */
         private boolean loadSingleResolution(String ticker, String period, LocalDate fromDate, LocalDate toDate) {
@@ -329,13 +369,16 @@ public class StockService {
                                                                 .date(c.getDate())
                                                                 .period(period)
                                                                 .open(BigDecimal.valueOf(
-                                                                                c.getOpen() != null ? c.getOpen() : 0.0))
+                                                                                c.getOpen() != null ? c.getOpen()
+                                                                                                : 0.0))
                                                                 .high(BigDecimal.valueOf(
-                                                                                c.getHigh() != null ? c.getHigh() : 0.0))
+                                                                                c.getHigh() != null ? c.getHigh()
+                                                                                                : 0.0))
                                                                 .low(BigDecimal.valueOf(
                                                                                 c.getLow() != null ? c.getLow() : 0.0))
                                                                 .close(BigDecimal.valueOf(
-                                                                                c.getClose() != null ? c.getClose() : 0.0))
+                                                                                c.getClose() != null ? c.getClose()
+                                                                                                : 0.0))
                                                                 .volume(c.getVolume() != null ? c.getVolume() : 0L)
                                                                 .build())
                                                 .collect(Collectors.toList());
@@ -343,7 +386,8 @@ public class StockService {
                                 if (!newCandles.isEmpty()) {
                                         stockCandleRepository.saveAll(newCandles);
                                         quotaManager.incrementUsage("EODHD");
-                                        log.info("개별 resolution 로드 완료: {} period={}, count={}, Quota 1회 카운트", ticker, period, newCandles.size());
+                                        log.info("개별 resolution 로드 완료: {} period={}, count={}, Quota 1회 카운트", ticker,
+                                                        period, newCandles.size());
                                         return true;
                                 }
                         } else {
@@ -396,7 +440,7 @@ public class StockService {
                                 .findAllBySymbolAndPeriodAndDateBetweenOrderByDateAsc(ticker, period, fromDate, toDate);
 
                 // Step 4: 요청된 resolution이 없으면 개별 보완
-                // 주의: Step 2-1에서 부분 배치 로드가 실행되었을 수 있으므로, 
+                // 주의: Step 2-1에서 부분 배치 로드가 실행되었을 수 있으므로,
                 // 요청된 period가 w 또는 m이고 해당 period의 데이터가 전혀 없을 때만 개별 보완 실행
                 boolean singleResolutionLoaded = false;
                 if (cachedCandles.isEmpty() && !stockCandleRepository.existsBySymbolAndPeriod(ticker, period)) {
@@ -407,7 +451,8 @@ public class StockService {
                                 if (singleResolutionLoaded) {
                                         // 다시 조회
                                         cachedCandles = stockCandleRepository
-                                                        .findAllBySymbolAndPeriodAndDateBetweenOrderByDateAsc(ticker, period, fromDate, toDate);
+                                                        .findAllBySymbolAndPeriodAndDateBetweenOrderByDateAsc(ticker,
+                                                                        period, fromDate, toDate);
                                 }
                         }
                 }
@@ -418,11 +463,13 @@ public class StockService {
                 boolean needsRefresh = false;
                 if (!cachedCandles.isEmpty()) {
                         // 요청 범위에 오늘 날짜가 포함되어 있고, 오늘 데이터가 없으면 갱신 필요
-                        if (toDate.isAfter(today.minusDays(1)) && 
-                            cachedCandles.stream().noneMatch(c -> c.getDate().equals(today))) {
+                        if (toDate.isAfter(today.minusDays(1)) &&
+                                        cachedCandles.stream().noneMatch(c -> c.getDate().equals(today))) {
                                 needsRefresh = true;
                                 log.debug("오늘 데이터가 없어 갱신 필요: ticker={}, period={}, latestDate={}", ticker, period,
-                                                cachedCandles.isEmpty() ? null : cachedCandles.get(cachedCandles.size() - 1).getDate());
+                                                cachedCandles.isEmpty() ? null
+                                                                : cachedCandles.get(cachedCandles.size() - 1)
+                                                                                .getDate());
                         }
                 } else {
                         // DB에 해당 period 데이터가 없으면 갱신 필요
@@ -472,7 +519,8 @@ public class StockService {
                                                         stockCandleRepository.saveAll(newCandles);
                                                         quotaManager.incrementUsage("EODHD");
                                                         cachedCandles = newCandles;
-                                                        log.info("EODHD 데이터 적재 완료: ticker={}, period={}, count={}", ticker,
+                                                        log.info("EODHD 데이터 적재 완료: ticker={}, period={}, count={}",
+                                                                        ticker,
                                                                         period, newCandles.size());
                                                 }
                                         }
@@ -481,10 +529,12 @@ public class StockService {
                                         // API 호출 실패 시 기존 데이터가 있으면 그것을 반환 (Stale 표시)
                                         if (cachedCandles.isEmpty()) {
                                                 // 기존 데이터도 없으면 예외를 던지지 않고 빈 리스트 반환
-                                                log.warn("EODHD API 실패 및 기존 데이터 없음: ticker={}, period={}", ticker, period);
+                                                log.warn("EODHD API 실패 및 기존 데이터 없음: ticker={}, period={}", ticker,
+                                                                period);
                                         } else {
                                                 isStale = true;
-                                                log.warn("EODHD API 실패, 기존 데이터 반환 (Stale): ticker={}, period={}", ticker, period);
+                                                log.warn("EODHD API 실패, 기존 데이터 반환 (Stale): ticker={}, period={}",
+                                                                ticker, period);
                                         }
                                 }
                         } else {
@@ -496,7 +546,8 @@ public class StockService {
                                 } else {
                                         // Case A: 기존 데이터 반환 + Stale 표시
                                         isStale = true;
-                                        log.warn("EODHD Quota 초과, 기존 데이터 반환 (Stale): ticker={}, period={}", ticker, period);
+                                        log.warn("EODHD Quota 초과, 기존 데이터 반환 (Stale): ticker={}, period={}", ticker,
+                                                        period);
                                 }
                         }
                 }

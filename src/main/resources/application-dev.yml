@@ -5,7 +5,7 @@
 spring:
   # 개발용 데이터베이스 (Docker Compose)
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:5432/madcamp02-backend
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:15432}/madcamp02-backend
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:postgres}
 
@@ -31,7 +31,7 @@ spring:
 # 개발용 JWT 설정
 # ============================================
 jwt:
-  secret: dev-secret-key-for-local-development-minimum-32-characters-long
+  secret: dhisIsAValidBase64SecretKeyForLocalDevelopmentMinimum32CharsLong1234567890abcdef
   access-expiration: 86400000   # 개발시 24시간
   refresh-expiration: 604800000 # 7일
 
