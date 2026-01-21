@@ -63,7 +63,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom(); // 임의 이메일/닉네임 생성용
 
     // 프론트엔드 리다이렉트 URL (로그인 성공 후 이동할 페이지)
-    @Value("${app.oauth2.redirect-uri:http://localhost:3000/oauth/callback}")
+    @Value("${app.oauth2.redirect-uri:http://madcamp.royaljellynas.org/oauth/callback}")
     private String frontendRedirectUri;
 
     // Refresh Token 만료 시간 (밀리초)
@@ -170,7 +170,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         );
 
         // [5단계: 프론트엔드로 리다이렉트 (토큰 전달)]
-        // URL: http://localhost:3000/oauth/callback?accessToken=xxx&refreshToken=xxx&isNewUser=true
+        // URL: http://madcamp.royaljellynas.org/oauth/callback?accessToken=xxx&refreshToken=xxx&isNewUser=true
         String targetUrl = UriComponentsBuilder.fromUriString(frontendRedirectUri)
                 .queryParam("accessToken", accessToken)
                 .queryParam("refreshToken", refreshToken)

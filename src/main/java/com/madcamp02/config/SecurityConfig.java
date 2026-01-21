@@ -238,7 +238,7 @@ public class SecurityConfig {
 
         // 허용할 Origin
         configuration.setAllowedOrigins(Arrays.asList(
-                "http://localhost:3000",
+                "http://madcamp.royaljellynas.org",
                 "https://madcamp02.com"));
         // setAllowedOrigins: 허용할 사이트 주소. (localhost:3000 등 개발/운영 주소)
 

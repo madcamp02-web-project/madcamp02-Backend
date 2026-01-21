@@ -26,7 +26,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws-stomp")
                 .setAllowedOriginPatterns(
-                        "http://localhost:3000"
+                        "http://madcamp.royaljellynas.org"
                         //아직은 개발단계라 이거 안채워두긴 하는데 여기에 내 도메인 추가 무조건 해줘야 함!
                 )
                 // 어려운 말: 프론트 환경에 따라 SockJS fallback이 필요할 수 있어 기본 활성화

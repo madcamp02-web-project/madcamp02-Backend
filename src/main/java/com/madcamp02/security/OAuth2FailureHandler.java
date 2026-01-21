@@ -35,7 +35,7 @@ import java.io.IOException;
 public class OAuth2FailureHandler implements AuthenticationFailureHandler {
 
     // 프론트엔드 리다이렉트 URL (로그인 실패 후 이동할 페이지)
-    @Value("${app.oauth2.redirect-uri:http://localhost:3000/oauth/callback}")
+    @Value("${app.oauth2.redirect-uri:http://madcamp.royaljellynas.org/oauth/callback}")
     private String frontendRedirectUri;
 
     @Override
@@ -48,7 +48,7 @@ public class OAuth2FailureHandler implements AuthenticationFailureHandler {
         log.error("OAuth2 로그인 실패 - 에러: {}", exception.getMessage(), exception);
 
         // 프론트엔드로 리다이렉트 (에러 쿼리 파라미터 포함)
-        // URL: http://localhost:3000/oauth/callback?error=auth_failed
+        // URL: http://madcamp.royaljellynas.org/oauth/callback?error=auth_failed
         String targetUrl = UriComponentsBuilder.fromUriString(frontendRedirectUri)
                 .queryParam("error", "auth_failed")
                 .build().toUriString();

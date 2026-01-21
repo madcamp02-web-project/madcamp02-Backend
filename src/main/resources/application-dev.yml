@@ -69,7 +69,7 @@ kasi:
 
 ai:
   server:
-    url: http://localhost:8000
+    url: ${AI_SERVER_URL:http://madcampbackend.royaljellynas.org/}
 
 # ============================================
 # 개발 환경 Swagger 활성화

@@ -98,7 +98,7 @@ app:
   oauth2:
     # OAuth2 로그인 성공 후 프론트엔드로 리다이렉트할 URI
     # 토큰이 쿼리 파라미터로 전달됨: ?accessToken=xxx&refreshToken=xxx&isNewUser=true
-    redirect-uri: ${OAUTH2_REDIRECT_URI:http://localhost:3000/oauth/callback}
+    redirect-uri: ${OAUTH2_REDIRECT_URI:http://madcamp.royaljellynas.org/oauth/callback}
 
 # ============================================
 # 서버 설정
@@ -132,7 +132,7 @@ eodhd:
 # AI 서버 설정
 ai:
   server:
-    url: ${AI_SERVER_URL:http://localhost:8000}
+    url: ${AI_SERVER_URL:http://madcampbackend.royaljellynas.org/}
     timeout: 30000
 
 # ============================================
