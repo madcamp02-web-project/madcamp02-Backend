@@ -60,7 +60,7 @@ flowchart TB
 
   BE -->|REST| FH
   BE -->|WebSocket<br/>Trades| FHWS
-  BE -->|HTTP (SSE Proxy)| AI
+  BE -->|HTTP SSE Proxy| AI
 ```
 
 ---
