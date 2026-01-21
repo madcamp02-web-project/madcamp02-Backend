@@ -6,7 +6,7 @@ Finnhub 실시간 시세 + 모의투자(거래/포트폴리오) + 게이미피�
 
 ## 기술 스택
 
-### Backend (Core & Infra)
+### Backend (Core & Infra) / DevOps
 
 - **언어/런타임**: Java 21 (LTS)
 - **프레임워크**: Spring Boot 3.4.x
@@ -17,14 +17,14 @@ Finnhub 실시간 시세 + 모의투자(거래/포트폴리오) + 게이미피�
 - **DB 마이그레이션**: Flyway (버전드 스키마 관리)
 - **캐시/브로커**: Redis 7 (시장 데이터/시세 캐싱, 최신가 저장, Pub/Sub 보조)
 - **RDBMS**: PostgreSQL 16 (docker-compose 기준, 메인 트랜잭션 DB)
+- **인프라/배포**: Docker / docker-compose (PostgreSQL, Redis, Backend 컨테이너), GitHub Actions 기반 CI (Gradle 빌드 + 테스트)
 
-### Frontend / AI / DevOps
+### Frontend / AI 
 
 - **Frontend**: Next.js 16 + React 19 + TypeScript 5.x + Tailwind CSS + Shadcn UI + Zustand + STOMP.js
 - **차트/시각화**: Lightweight Charts (캔들/라인 차트)
 - **네트워크 레이어**: Axios (REST), STOMP.js (WSS)
 - **AI**: Python 3.11+ FastAPI + Gemini API (향후 SSE 스트리밍 연동 계획)
-- **인프라/배포**: Docker / docker-compose (PostgreSQL, Redis, Backend 컨테이너), GitHub Actions 기반 CI (Gradle 빌드 + 테스트)
 
 ---
 
