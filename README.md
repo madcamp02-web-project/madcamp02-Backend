@@ -52,8 +52,8 @@ flowchart TB
     AI[AI Server<br/>FastAPI + Gemini]
   end
 
-  FE -->|HTTPS (REST)| BE
-  FE -->|WSS (STOMP)<br/>/ws-stomp| WS
+  FE -->|HTTPS| BE
+  FE -->|WSS /ws-stomp| WS
 
   BE -->|JPA| PG
   BE -->|Cache<br/>Pub/Sub| RD
@@ -282,69 +282,69 @@ sequenceDiagram
 ```mermaid
 erDiagram
     Users {
-        BIGINT user_id PK
-        VARCHAR email UNIQUE
-        VARCHAR password
-        VARCHAR provider
-        VARCHAR nickname
-        DATE    birth_date
-        TIME    birth_time
-        VARCHAR gender
-        VARCHAR calendar_type
-        VARCHAR saju_element
-        VARCHAR zodiac_sign
-        BOOLEAN is_public
-        BOOLEAN is_ranking_joined
+        int user_id
+        string email
+        string password
+        string provider
+        string nickname
+        string birth_date
+        string birth_time
+        string gender
+        string calendar_type
+        string saju_element
+        string zodiac_sign
+        bool is_public
+        bool is_ranking_joined
     }
 
     Wallet {
-        BIGINT user_id PK, FK
-        NUMERIC cash_balance
-        NUMERIC total_assets
-        NUMERIC realized_profit
-        NUMERIC game_coin
+        int user_id
+        float cash_balance
+        float total_assets
+        float realized_profit
+        float game_coin
     }
 
     Portfolio {
-        BIGINT user_id PK, FK
-        VARCHAR ticker  PK
-        NUMERIC quantity
-        NUMERIC avg_price
+        int user_id
+        string ticker
+        float quantity
+        float avg_price
     }
 
     TradeLogs {
-        BIGINT log_id PK
-        BIGINT user_id FK
-        VARCHAR ticker
-        VARCHAR type
-        NUMERIC quantity
-        NUMERIC price
-        NUMERIC total_amount
-        NUMERIC realized_pnl
-        TIMESTAMP trade_date
+        int log_id
+        int user_id
+        string ticker
+        string type
+        float quantity
+        float price
+        float total_amount
+        float realized_pnl
+        string trade_date
     }
 
     Items {
-        BIGINT item_id PK
-        VARCHAR name
-        VARCHAR category
-        VARCHAR rarity
-        DOUBLE probability
+        int item_id
+        string name
+        string category
+        string rarity
+        float probability
     }
 
     Inventory {
-        BIGINT inventory_id PK
-        BIGINT user_id FK
-        BIGINT item_id FK
-        BOOLEAN equipped
+        int inventory_id
+        int user_id
+        int item_id
+        bool equipped
     }
 
     ExchangeRates {
-        BIGINT id PK
-        DATE   as_of_date
-        VARCHAR cur_unit
-        VARCHAR cur_nm
-        NUMERIC deal_bas_r
+        int id
+        string as_of_date
+        string cur_unit
+        string cur_nm
+        float deal_bas_r
     }
 
     Users ||--|| Wallet : "has"
